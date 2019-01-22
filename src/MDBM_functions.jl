@@ -44,27 +44,27 @@ function subtoind(Nax::Array{Int64,1}, vectindex::Array{Int64,3})
         #  NaxNprod=[1;cumprod(Nax[1:end-1])].'
         #return  mapslices(x->(NaxNprod*(x-1))+1,vectindex,[1,2])
         NaxNprod = [1;cumprod(Nax[1:end - 1])]
-    
-    #=
-    "@devec"
+
+        #=
+        "@devec"
         @time begin
-         resout = zeros(1,size(vectindex,2),size(vectindex,3))
-         for m = 1 : size(vectindex,3)
-         for j = 1 : size(vectindex,2)
-           for i = 1 :  length(NaxNprod)
-             resout[1,j,m] += (vectindex[i,j,m] -1)* NaxNprod[i] + 1
-           end
-         end
-       end
-       end
-    =#
-    
-        return  sum((vectindex - 1) .* NaxNprod, 1) + 1
+        resout = zeros(1,size(vectindex,2),size(vectindex,3))
+        for m = 1 : size(vectindex,3)
+        for j = 1 : size(vectindex,2)
+        for i = 1 :  length(NaxNprod)
+        resout[1,j,m] += (vectindex[i,j,m] -1)* NaxNprod[i] + 1
     end
+end
+end
+end
+=#
+
+return  sum((vectindex - 1) .* NaxNprod, 1) + 1
+end
 end
 
 function subtoind!(res::Array{Int64,2}, Nax::Array{Int64,1}, vectindex::Array{Int64,2})
-      #res=Array{Int64}(size(vectindex,2))
+    #res=Array{Int64}(size(vectindex,2))
     if isempty(vectindex)
         return zeros(Int64, 0)
     else
@@ -83,7 +83,7 @@ function subtoind(Nax::Array{Int64,1}, vectindex::Array{Int64,1})#copmputing for
         return out = (((transpose(vectindex) - 1) * NaxNprod) + 1)
     end
 end
-    
+
 function vect2pos(ax::Array{Array{Float64,1}}, vectindex::Array{Int64,2})
     [ax[i][vectindex[i,j]] for i = 1:length(ax) , j = 1:size(vectindex, 2)]
 end
@@ -93,24 +93,24 @@ function vect2pos(ax::Array{Array{Float64,1}}, vectindex::Array{Int64,1})
 end
 
 function vect2pos(ax::Array{Array{Float64,1}}, vectindex::Array{Int64,2}, P::Array{Float64,2})#linearly interpolates within the cube
-      #0<P<1
+    #0<P<1
     [ax[i][vectindex[i,j]] + P[i,j] * (ax[i][vectindex[i,j + 1]] - ax[i][vectindex[i,j]]) for i = 1:length(ax) , j = 1:size(vectindex, 2)]
 end
 
 function vect2pos(ax::Array{Array{Float64,1}}, vectindex::Array{Int64,1}, P::Array{Float64,1})#linearly interpolates within the cube
-      #0<P<1
+    #0<P<1
     [ax[i][vectindex[i]] + P[i] * (ax[i][vectindex[i] + 1] - ax[i][vectindex[i]]) for i = 1:length(ax)]
 end
 
 function vect2pos(ax::Array{Array{Float64,1}}, vectposition::Array{Float64,2})#linearly interpolates within the cube
-      #(vectposition[i,j]%1) #relative index within the cube
-      #vectindex=floor(Int64,vectposition[i,j])
+    #(vectposition[i,j]%1) #relative index within the cube
+    #vectindex=floor(Int64,vectposition[i,j])
     [ax[i][floor(Int64, vectposition[i,j])] * (1 - (vectposition[i,j] % 1)) + ax[i][floor(Int64, vectposition[i,j]) + 1] * (vectposition[i,j] % 1) for i = 1:length(ax) , j = 1:size(vectindex, 2)]
 end
 
 function vect2pos(ax::Array{Array{Float64,1}}, vectposition::Array{Float64,1})#linearly interpolates within the cube
-      #(vectposition[i,j]%1) #relative index within the cube
-      #vectindex=floor(Int64,vectposition[i,j])
+    #(vectposition[i,j]%1) #relative index within the cube
+    #vectindex=floor(Int64,vectposition[i,j])
     [ax[i][floor(Int64, vectposition[i])] * (1 - (vectposition[i] % 1)) + ax[i][floor(Int64, vectposition[i]) + 1] * (vectposition[i] % 1) for i = 1:length(ax)]
 end
 
@@ -124,13 +124,13 @@ function db_combnk(v, k)
             #         disp('positive integer element has to extract')
             c = [];
             println("ez lefut?");
-          #      prinlt(c)
+            #      prinlt(c)
         elseif k == 1
             c = v[:];
         else
             if k > m
                 c = [];
-              #            disp('vector has less elements than needed')
+                #            disp('vector has less elements than needed')
             else
                 cnew = Int64[];
                 for kallc = 1:m
@@ -145,7 +145,7 @@ function db_combnk(v, k)
                     end
                 end
                 c = cnew;
-    
+
                 c = v[c];
                 if k == 1
                     c = c';
@@ -176,15 +176,15 @@ function mdbm_problem(f::Function, axabstract::Array{AbstractArray{T,1} where T,
     end
 
     #HC=Array{Float64}(Ncodim+isconstrained,prod([length(kax) for kax in ax]))
-        #HC=mapslices(f,vect2pos(ax,vectindex),[1])
+    #HC=mapslices(f,vect2pos(ax,vectindex),[1])
     HC = fevaluate(f, fconstrain, ax, vectindex, Ncodim + isconstrained, isfvectorized=fvectorized)
 
     ncubelin = collect(1:prod([length(kax) - 1 for kax in ax]))
     ncubevect = indtosub(Nax - 1, ncubelin)
-        #N::Int64
-        #compind
-        #pointerp
-        #DT
+    #N::Int64
+    #compind
+    #pointerp
+    #DT
     posinterp = Array{Float64}(length(Nax), 0)
     gradient = Array{Float64}(Ncodim + isconstrained, length(Nax), 0)
     DT1 = Array{Int64}(2, 0)
@@ -193,7 +193,7 @@ function mdbm_problem(f::Function, axabstract::Array{AbstractArray{T,1} where T,
 
     if fullrefinenum > 0
         checkncube!(mdbm)
-          #interpolate!(mdbm)
+        #interpolate!(mdbm)
         for k = 1:fullrefinenum
             refine!(mdbm)
             checkncube!(mdbm)
@@ -205,8 +205,8 @@ function mdbm_problem(f::Function, axabstract::Array{AbstractArray{T,1} where T,
 end
 
 function fevaluate(f::Function, fconstrain::Function, ax::Array{Array{Float64,1},1}, vectindex::Array{Int64,2}, NcodimNplusisconstrained=1;isfvectorized=false)
-        #compute the elements even if it is already computed before
-        #check and filter the vectindex to elimiate the redundant computation
+    #compute the elements even if it is already computed before
+    #check and filter the vectindex to elimiate the redundant computation
     if size(vectindex, 2) == 0
         HC = zeros(Float64, NcodimNplusisconstrained, 0)
     else
@@ -219,14 +219,14 @@ function fevaluate(f::Function, fconstrain::Function, ax::Array{Array{Float64,1}
                 HC[:,k] = [f(axialpos[:,k]...);fconstrain(axialpos[:,k]...)]
             end
         end
-         #  @time HC=mapslices(f,vect2pos(ax,vectindex),[1]) # slower
+        #  @time HC=mapslices(f,vect2pos(ax,vectindex),[1]) # slower
     end
     return HC
 end
 
 function isbracketing(Nax::Array{Int64,1}, HC::Array{Float64,2}, isconstrained::Bool=false, selectionmode::Int64=0)
-        #TODO: create the higher order selection mode
-        #HCsign=HC[1:end-isconstrained,:].>0
+    #TODO: create the higher order selection mode
+    #HCsign=HC[1:end-isconstrained,:].>0
     if isconstrained
         HsignPOS = HC[1:end - isconstrained,:] .>= 0
         HsignNEG = HC[1:end - isconstrained,:] .>= 0
@@ -240,28 +240,28 @@ function isbracketing(Nax::Array{Int64,1}, HC::Array{Float64,2}, isconstrained::
 end
 
 function isbracketing(Nax::Array{Int64,1}, HC::Array{Float64,3}, isconstrained::Bool=false, selectionmode::Int64=0)
-        #TODO: create the higher order selection mode
-        #HCsign=HC[1:end-isconstrained,:].>0
+    #TODO: create the higher order selection mode
+    #HCsign=HC[1:end-isconstrained,:].>0
     if isconstrained
         HsignPOS = HC[1:end - isconstrained,:,:] .>= 0
         HsignNEG = HC[1:end - isconstrained,:,:] .<= 0
         CsignPOS = HC[end,:,:] .>= 0#dimensions reducred, becuse it is [1xnxm]->[nxm]  ## if all is negative, then it is a false ncube
-          #@time (all(any(Hsign,2).&any(.!Hsign,2),1))[:].&(any(Csign,1))[:]
-          #@time squeeze(squeeze(all(any(Hsign,2).&any(.!Hsign,2),1),1),1).&squeeze(any(Csign,1),1)
+        #@time (all(any(Hsign,2).&any(.!Hsign,2),1))[:].&(any(Csign,1))[:]
+        #@time squeeze(squeeze(all(any(Hsign,2).&any(.!Hsign,2),1),1),1).&squeeze(any(Csign,1),1)
         return squeeze(squeeze(all(any(HsignPOS, 2) .& any(HsignNEG, 2), 1), 1), 1) .& squeeze(any(CsignPOS, 1), 1)
     else
         HsignPOS = HC[1:end,:,:] .>= 0
         HsignNEG = HC[1:end,:,:] .>= 0
-          #@time all(any(Hsign,2).&any(.!Hsign,2),1)[:]
-          #@time squeeze(squeeze(all(any(Hsign,2).&any(.!Hsign,2),1),1),1)
+        #@time all(any(Hsign,2).&any(.!Hsign,2),1)[:]
+        #@time squeeze(squeeze(all(any(Hsign,2).&any(.!Hsign,2),1),1),1)
         return squeeze(squeeze(all(any(HsignPOS, 2) .& any(HsignNEG, 2), 1), 1), 1)
     end
 end
 
 #=
 function isbracketing(mdbm::mdbm_object)
-    #TODO: create the higher order selection mode
-    return isbracketing(mdbm.Nax,mdbm.HC,mdbm.isconstrained,mdbm.selectionmode)
+#TODO: create the higher order selection mode
+return isbracketing(mdbm.Nax,mdbm.HC,mdbm.isconstrained,mdbm.selectionmode)
 end
 =#
 
@@ -288,26 +288,26 @@ function checkncube(mdbm::mdbm_object, ncubevect::Array{Int64,2})
         p = sortperm(cubinds[:])
         pp = sortperm(p)
         cubindsU = unique(cubinds[p])
-          #cubinds[p]
+        #cubinds[p]
         unixind = indexin_sorted(cubinds[p], cubindsU)
-          #cubindsU[unixind[pp]]
+        #cubindsU[unixind[pp]]
 
         HCindU = indexin_sorted(cubindsU, mdbm.linindex)
 
         HCallcubes = mdbm.HC[:,HCindU[unixind[pp]]]
         HCallcubes = reshape(HCallcubes, mdbm.Ncodim + mdbm.isconstrained, 2^mdbm.Ndim, size(ncubevect, 2))
-          #@time propercube=[isbracketing(mdbm.Nax,HCallcubes[:,:,j],mdbm.isconstrained,mdbm.selectionmode) for j=1:size(ncubevect,2)]
-          #@time propercube=mapslices(X ->isbracketing(mdbm.Nax,X,mdbm.isconstrained,mdbm.selectionmode), HCallcubes, [1,2])
+        #@time propercube=[isbracketing(mdbm.Nax,HCallcubes[:,:,j],mdbm.isconstrained,mdbm.selectionmode) for j=1:size(ncubevect,2)]
+        #@time propercube=mapslices(X ->isbracketing(mdbm.Nax,X,mdbm.isconstrained,mdbm.selectionmode), HCallcubes, [1,2])
 
         propercube = isbracketing(mdbm.Nax, HCallcubes, mdbm.isconstrained, mdbm.selectionmode)
 
-        
-          #cubeindloc=Array{Int64}(2^mdbm.Ndim)
-          #HC=Array{Int64}(mdbm.Ncodim+mdbm.isconstrained,2^mdbm.Ndim)
 
-          #@simd for j=1:size(ncubevect,2)
-          #  propercube[j]=isbracketing(mdbm.Nax,mdbm.HC[:,indexin_sorted(cubinds[:,j,1],mdbm.linindex)],mdbm.isconstrained,mdbm.selectionmode)
-          #end
+        #cubeindloc=Array{Int64}(2^mdbm.Ndim)
+        #HC=Array{Int64}(mdbm.Ncodim+mdbm.isconstrained,2^mdbm.Ndim)
+
+        #@simd for j=1:size(ncubevect,2)
+        #  propercube[j]=isbracketing(mdbm.Nax,mdbm.HC[:,indexin_sorted(cubinds[:,j,1],mdbm.linindex)],mdbm.isconstrained,mdbm.selectionmode)
+        #end
         if isempty(mdbm.ncubelin)
             println("There is no bracketing n-cubes!")
         end
@@ -325,12 +325,12 @@ function refine!(mdbm::mdbm_object, dims=[0])
     mdbm.linindex = subtoind(mdbm.Nax, mdbm.vectindex)
 
     mdbm.ncubevect[dimindex,:] = (mdbm.ncubevect[dimindex,:] - 1) * 2 + 1
-        # expanding along each selected dimension
+    # expanding along each selected dimension
     @simd for kdim in dimindex
         mdbm.ncubevect = hcat(mdbm.ncubevect, mdbm.ncubevect .+ (collect(1:mdbm.Ndim) .== kdim))
     end
     mdbm.ncubelin = subtoind(mdbm.Nax, mdbm.ncubevect)
-        #sorting
+    #sorting
 
     p = sortperm(mdbm.ncubelin)
     mdbm.ncubelin = mdbm.ncubelin[p]
@@ -355,8 +355,8 @@ function evalmissingnodes!(mdbm::mdbm_object, ncubevect::Array{Int64,2})
 
         cubinds = unique(cubinds[:])
         sort!(cubinds)
-          #bbbbbbbbbbbbbbb
-          #newlocind=cubinds[indexin(cubinds,mdbm.linindex).==0]
+        #bbbbbbbbbbbbbbb
+        #newlocind=cubinds[indexin(cubinds,mdbm.linindex).==0]
 
         newlocind = cubinds[indexin_sorted_iszero(cubinds, mdbm.linindex)]
         newvectind = indtosub(mdbm.Nax, newlocind)
@@ -367,8 +367,8 @@ function evalmissingnodes!(mdbm::mdbm_object, ncubevect::Array{Int64,2})
         end
 
         mdbm.HC = hcat(mdbm.HC, fevaluate(mdbm.f, mdbm.fconstrain, mdbm.ax, newvectind, mdbm.Ncodim + mdbm.isconstrained, isfvectorized=mdbm.fvectorized))
-          #TODO: megnézni a sorbarakást, hogy kell-e, gyorsabb lesz-e
-          #sorting
+        #TODO: megnézni a sorbarakást, hogy kell-e, gyorsabb lesz-e
+        #sorting
         p = sortperm(mdbm.linindex)
         mdbm.HC = mdbm.HC[:,p]
         mdbm.linindex = mdbm.linindex[p]
@@ -389,8 +389,8 @@ function interpolate!(mdbm::mdbm_object, bracketingoverwrite::Bool=true)
         mdbm.gradient = Array{Float64}(mdbm.Ncodim, mdbm.Ndim, 0)
         sub2 = indtosub(2 * ones(Int64, mdbm.Ndim), collect(1:2^mdbm.Ndim)) - 1
         @simd for j = 1:size(mdbm.ncubevect, 2)
-          #mdbm.posinterp[:,j]=vect2pos(ax,mdbm.ncubevect[:,j]) #"lower left corener"
-          #mdbm.posinterp[:,j]=median(vect2pos(ax,mdbm.ncubevect[:,j].+sub2),2) #midpoint
+            #mdbm.posinterp[:,j]=vect2pos(ax,mdbm.ncubevect[:,j]) #"lower left corener"
+            #mdbm.posinterp[:,j]=median(vect2pos(ax,mdbm.ncubevect[:,j].+sub2),2) #midpoint
             mdbm.posinterp[:,j] = vect2pos(mdbm.ax, mdbm.ncubevect[:,j], 0.5 * ones(mdbm.Ndim))  #much faster!!!!
         end
 
@@ -412,11 +412,11 @@ function interpolate!(mdbm::mdbm_object, bracketingoverwrite::Bool=true)
             axlocdimles = hcat([axlocdimles;-ones(1, 2^(kdim - 1))], [axlocdimles;ones(1, 2^(kdim - 1))]);
         end
         TAn = hcat(-ones(2^mdbm.Ndim, 1), transpose(axlocdimles))
-          #     TAn2=inv(TAn.'*TAn);
-          #     TAtrafo=TAn2*TAn.';
+        #     TAn2=inv(TAn.'*TAn);
+        #     TAtrafo=TAn2*TAn.';
         TAtrafo = (transpose(TAn) * TAn) \ transpose(TAn)
 
-  
+
         As = Array{Float64}(mdbm.Ncodim)
         ns = Array{Float64}(mdbm.Ndim, mdbm.Ncodim)
         solall = Array{Float64}(mdbm.Ncodim + mdbm.Ndim, mdbm.Ncodim)
@@ -424,11 +424,11 @@ function interpolate!(mdbm::mdbm_object, bracketingoverwrite::Bool=true)
         HCloc = Array{Float64}(mdbm.Ndim + mdbm.isconstrained, 2^mdbm.Ndim)
         P = Array{Float64}(mdbm.Ndim)
         #println("1sr oredr interpolation time!")
-      #@simd
+        #@simd
         for j = 1:size(mdbm.ncubevect, 2)
             locind = indexin_sorted(cubinds[:,j,1], mdbm.linindex)
-        #  HC=mdbm.HC[:,locind]
-        #the functionvalue of the constraint must be considered during the interpolation to force the point into the boundary of the surface
+            #  HC=mdbm.HC[:,locind]
+            #the functionvalue of the constraint must be considered during the interpolation to force the point into the boundary of the surface
             HCloc = mdbm.HC[:,locind]
             ConstrainDominant = (mdbm.isconstrained && any(HCloc[end,:] .<= 0));
             solall = TAtrafo * transpose(HCloc[1:mdbm.Ncodim + ConstrainDominant,:]);
@@ -436,18 +436,18 @@ function interpolate!(mdbm::mdbm_object, bracketingoverwrite::Bool=true)
             As = solall[1,:];#it is not a real distance within the n-cube (it is ~n*A)!!!
             ns = solall[2:end,:]
             P = ns * ((transpose(ns) * ns) \ As);
-        #TODO: what if it falls outside of the n-cube
-        #TODO: it should be removed ->what shall I do with the bracketing cubes?
+            #TODO: what if it falls outside of the n-cube
+            #TODO: it should be removed ->what shall I do with the bracketing cubes?
             if norm(P, 20) > 2 #  bondcube(kcubes)=all(norm(P)<=(Ndim^0.5));
                 propercube[j] = false;# P=2*P/norm(P,20);
             end
             mdbm.gradient[:,:,j] = ns[1:mdbm.Ndim,1:mdbm.Ncodim]
-        #mdbm.posinterp[:,j]=vect2pos(mdbm.ax,mdbm.ncubevect[:,j]+(P/2+0.5)) Can provide points outside of the range!!!
-        #mdbm.posinterp[:,j]=vect2pos(mdbm.ax,min(mdbm.Nax-1e-8,max(ones(mdbm.Ndim),mdbm.ncubevect[:,j]+(P/2+0.5))))#force it within the cube
+            #mdbm.posinterp[:,j]=vect2pos(mdbm.ax,mdbm.ncubevect[:,j]+(P/2+0.5)) Can provide points outside of the range!!!
+            #mdbm.posinterp[:,j]=vect2pos(mdbm.ax,min(mdbm.Nax-1e-8,max(ones(mdbm.Ndim),mdbm.ncubevect[:,j]+(P/2+0.5))))#force it within the cube
             mdbm.posinterp[:,j] = vect2pos(mdbm.ax, mdbm.ncubevect[:,j], (P / 2 + 0.5)) # if P falls outside the cube, only the gradient is used to extrapolate!!!
         end
     else #mdbm.interporder==2
-      end
+    end
     if bracketingoverwrite
         mdbm.gradient = mdbm.gradient[:,:,propercube]
         mdbm.posinterp = mdbm.posinterp[:,propercube]
@@ -457,8 +457,8 @@ function interpolate!(mdbm::mdbm_object, bracketingoverwrite::Bool=true)
 end
 
 function indexin_sorted(a::Array{Int64,1}, b::Array{Int64,1})
-        # b must contain all the lements of a
-        # a and b must be sorted
+    # b must contain all the lements of a
+    # a and b must be sorted
     if isempty(a)
         return zeros(0)
     elseif length(b) == 1 ##much faster!
@@ -483,18 +483,18 @@ function indexin_sorted(a::Array{Int64,1}, b::Array{Int64,1})
                         q1 = q
                         q = ceil(Int64, (q + q2) / 2)
                     end
-            #print([q1;q;q2])
-            #print([b[q]])
-            #println([a[k]])
+                    #print([q1;q;q2])
+                    #print([b[q]])
+                    #println([a[k]])
                 end
             end
             out[k] = b[q] == a[k] ? q : 0
             q = max(out[k], q1)
             q1 = q
             q2 = length(b)
-          #print("-----")
-          #print(out[1:k])
-          #println("----")
+            #print("-----")
+            #print(out[1:k])
+            #println("----")
             if q1 > length(b)#all the element is larger than the last one
                 break
             end
@@ -504,8 +504,8 @@ function indexin_sorted(a::Array{Int64,1}, b::Array{Int64,1})
 end
 
 function indexin_sorted_iszero(a::Array{Int64,1}, b::Array{Int64,1})
-        # b must contain all the lements of a
-        # a and b must be sorted
+    # b must contain all the lements of a
+    # a and b must be sorted
     if isempty(a)
         return zeros(0)
     elseif length(b) == 1 ##much faster!
@@ -529,18 +529,18 @@ function indexin_sorted_iszero(a::Array{Int64,1}, b::Array{Int64,1})
                         q1 = q
                         q = ceil(Int64, (q + q2) / 2)
                     end
-            #print([q1;q;q2])
-            #print([b[q]])
-            #println([a[k]])
+                    #print([q1;q;q2])
+                    #print([b[q]])
+                    #println([a[k]])
                 end
             end
             out[k] = b[q] == a[k] ? false : true
             q = max(out[k], q1)
             q1 = q
             q2 = length(b)
-          #print("-----")
-          #print(out[1:k])
-          #println("----")
+            #print("-----")
+            #print(out[1:k])
+            #println("----")
             if q1 > length(b)#all the element is larger than the last one
                 break
             end
@@ -573,7 +573,7 @@ function checkneighbour!(mdbm::mdbm_object)
             newneighbour = cubinds[indexin_sorted_iszero(cubinds, checkedncubes)]
             if !isempty(newneighbour)
                 evalmissingnodes!(mdbm, indtosub(mdbm.Nax, newneighbour))
-              #issorted(newneighbour)
+                #issorted(newneighbour)
                 bracketingcube = checkncube(mdbm, indtosub(mdbm.Nax, newneighbour))
                 newbracketinncubes = newneighbour[bracketingcube]
                 checkedncubes = sort(vcat(newneighbour, checkedncubes))
@@ -601,7 +601,7 @@ function DTconnect!(mdbm::mdbm_object)
         DT1 = Array{Int64,2}(0, 2)
         for j = 1:size(ncubevect, 2) #@simd
             locind = indexin_sorted(cubinds[:,j,1], ncubelin)
-          #DT1=vcat(DT1,hcat(ncubelin[j]*ones(Int64,sum(locind.!=0)),ncubelin[locind[locind.!=0]]))
+            #DT1=vcat(DT1,hcat(ncubelin[j]*ones(Int64,sum(locind.!=0)),ncubelin[locind[locind.!=0]]))
             DT1 = vcat(DT1, hcat(j * ones(Int64, sum(locind .!= 0)), locind[locind .!= 0]))
         end
         mdbm.DT1 = DT1
@@ -616,7 +616,7 @@ function DTconnect!(mdbm::mdbm_object)
         DT1corner = Array{Int64,2}(0, 2)
         @simd for j = 1:size(ncubevect, 2)
             locind = indexin_sorted(cubinds[:,j,1], ncubelin)
-          #DT1=vcat(DT1,hcat(ncubelin[j]*ones(Int64,sum(locind.!=0)),ncubelin[locind[locind.!=0]]))
+            #DT1=vcat(DT1,hcat(ncubelin[j]*ones(Int64,sum(locind.!=0)),ncubelin[locind[locind.!=0]]))
             DT1corner = vcat(DT1corner, hcat(j * ones(Int64, sum(locind .!= 0)), locind[locind .!= 0]))
         end
         DT1corner
@@ -663,12 +663,12 @@ function mdbm_Gadflylayer(mdbm::mdbm_object, topdim::Int64=1)
             x0 = mdbm.posinterp[1,:]
             y0 = mdbm.posinterp[1,:] * 0
         elseif length(mdbm.Nax) > 1
-           #~~~~~~~~~~~ interploated points ~~~~~~~~~~~~
+            #~~~~~~~~~~~ interploated points ~~~~~~~~~~~~
             x0 = mdbm.posinterp[1,:]
             y0 = mdbm.posinterp[2,:]
         end
         layer0 = layer(x=x0, y=y0,  Geom.point, style(highlight_width=0.4pt))
-         # plot(layer0,xsc,ysc) - not working ???
+        # plot(layer0,xsc,ysc) - not working ???
         return layer0
     elseif !isempty(mdbm.DT1)
 
@@ -678,7 +678,7 @@ function mdbm_Gadflylayer(mdbm::mdbm_object, topdim::Int64=1)
         y2 = mdbm.posinterp[2,mdbm.DT1[:,2]]
 
         layer1 = layer(x=x1, y=y1, xend=x2, yend=y2, Geom.segment)
-         #plot(layer1,xsc,ysc) - not working ???
+        #plot(layer1,xsc,ysc) - not working ???
         return layer1
     end
 end
@@ -699,13 +699,13 @@ function mdbm_plot(mdbm::mdbm_object, topdim::Int64=2)
             p = scatter(x0, y0, xlims=lims[1], ylims=(-1, 1), markersize=3)
             return p
         elseif length(mdbm.Nax) == 2
-           #~~~~~~~~~~~ interploated points ~~~~~~~~~~~~
+            #~~~~~~~~~~~ interploated points ~~~~~~~~~~~~
             x0 = mdbm.posinterp[1,:]
             y0 = mdbm.posinterp[2,:]
             p = scatter(x0, y0, xlims=lims[1], ylims=lims[2], markersize=3)
             return p
         elseif length(mdbm.Nax) >= 3
-           #~~~~~~~~~~~ interploated points ~~~~~~~~~~~~
+            #~~~~~~~~~~~ interploated points ~~~~~~~~~~~~
             x0 = mdbm.posinterp[1,:]
             y0 = mdbm.posinterp[2,:]
             z0 = mdbm.posinterp[3,:]
