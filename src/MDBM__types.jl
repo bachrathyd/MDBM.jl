@@ -145,6 +145,9 @@ function Axis(a::Axis)
 end
 
 
+function (axes::Vector{Axis})(is...)
+    (mdbm.axes[i].ticks[iv] for (i,iv) in enumerate(is))
+end
 
 
 struct NCube{IT<:Integer,FT<:AbstractFloat}
@@ -155,54 +158,64 @@ struct NCube{IT<:Integer,FT<:AbstractFloat}
     # curvnorm::Vector{T}
 end
 
+function allcorner(nc::NCube{IT,FT})  where IT where FT
+    T = Array{IT}(undef,0, 1)
+    for kdim = 1:length(nc.corner)
+        T = hcat([T;zeros(IT,1, 2^(kdim - 1))], [T;ones(IT,1, 2^(kdim - 1))]);
+    end
+    TS=SMatrix{length(nc.corner),2^length(nc.corner)}(T)
+
+    nc.corner::Vector{IT}.+((TS).*(nc.size::Vector{IT}))
+end
 # TOOD: egyszerűsíteni a létrehozást (bár lehet, hogy nem kell, csak 1-2 helyen fog szerepelni (max))
 # function NCube{IT<:Integer,FT<:AbstractFloat}(x::Vector{IT}) where IT where FT
 #     NCube(IT.(x),ones(IT,length(x)),Vector{FT}(undef,length(x)))
 # end
 
 
-
-
-# struct MDBM_Problem
-#     f::MemF
-#     c::MemF
-#     axes::Vector{Axis}
-#     ncubes::Vector{NCube}
-#     function MDBM_Problem(f,c,axes,ncubes::Vector{NCube{IT,FT}}) where IT where FT
-#         #new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),zeros(FT,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(mdbmaxes)...,)][:])
-#         new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),Vector{FT}(undef,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(mdbmaxes)...,)][:])
-#     end
-# end
-
 struct MDBM_Problem
     f::Function
     c::Function
     axes::Vector{Axis}
     ncubes::Vector{NCube}
-    function MDBM_Problem(f,c,axes,ncubes::Vector{NCube{IT,FT}}) where IT where FT
-        #new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),zeros(FT,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(mdbmaxes)...,)][:])
-        new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),Vector{FT}(undef,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(mdbmaxes)...,)][:])
+
+
+
+ááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááá
+    T::SMatrix..................#TODO: id kirakni!!!!
+
+    ezt:
+    T = Array{IT}(undef,0, 1)
+    for kdim = 1:length(nc.corner)
+        T = hcat([T;zeros(IT,1, 2^(kdim - 1))], [T;ones(IT,1, 2^(kdim - 1))]);
     end
-end
-function (axes::Vector{Axis})(i::Vector)
-    map((x,y)->x.ticks[y], mdbm.axes,i)
+
+ááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááá
+
+
+
+    function MDBM_Problem(f,c,axes,ncubes::Vector{NCube{IT,FT}}) where IT where FT
+        #new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),zeros(FT,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:])
+        new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),Vector{FT}(undef,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:])
+    end
 end
 
 function (axes::Vector{Axis})(i...,)
     try
-        map((x,y)->x.ticks[y], mdbm.axes,i)
+        map((x,y)->x.ticks[y], axes,i)
     catch
+        println("FUCK!")
         println("the number of indexes ($(length(i))) in not compatible with the length of axes ($(length(axes)))")
         println(i)
-        ((x)->println(length(x.ticks))).(mdbm.axes)
+        ((x)->println(length(x.ticks))).(axes)
     end
 end
 
 
-# function MDBM_Problem{IT,FT}(f::Function, mdbmaxes::Vector{Axis};constraint::Function=(x...,)->Float16(1.))
+# function MDBM_Problem{IT,FT}(f::Function, axes::Vector{Axis};constraint::Function=(x...,)->Float16(1.))
 #TODO: ha nincs megadva constraint akkor arra ne csináljon memoization (mert biztosan lassabb lesz!)
-function MDBM_Problem(f::Function, mdbmaxes::Vector{<:Axis};constraint::Function=(x...,)->true, memoization::Bool=true)#Float16(1.)
-    argtypesofmyfunc=map(x->typeof(x).parameters[1], mdbmaxes);#Argument Type
+function MDBM_Problem(f::Function, axes::Vector{<:Axis};constraint::Function=(x...,)->true, memoization::Bool=true)#Float16(1.)
+    argtypesofmyfunc=map(x->typeof(x).parameters[1], axes);#Argument Type
     AT=Tuple{argtypesofmyfunc...};
     type_f=Base.return_types(f,AT)
     if length(type_f)==0
@@ -229,17 +242,17 @@ end
     #fun=MemF((x)->[f(x...,),constraint(x...,)],Array{MDBMcontainer{RTc,AT}}(undef, 0));
 
 
-    MDBM_Problem(fun,cons,mdbmaxes,Vector{NCube{Int64,Float64}}(undef, 0))
+    MDBM_Problem(fun,cons,axes,Vector{NCube{Int64,Float64}}(undef, 0))
 end
 
 # {AbstractArray{T,1} where T}
 # function MDBM_Problem(f::Function, a::AbstractVector;constraint::Function=(x...,)->Float16(1.))
 function MDBM_Problem(f::Function, a::Vector{<:AbstractVector};constraint::Function=(x...,)->true, memoization::Bool=true)
-    mdbmaxes=[Axis(ax) for ax in a]
-    argtypesofmyfunc=map(x->typeof(x).parameters[1], mdbmaxes);#Argument Type
+    axes=[Axis(ax) for ax in a]
+    argtypesofmyfunc=map(x->typeof(x).parameters[1], axes);#Argument Type
     AT=Tuple{argtypesofmyfunc...};
     type_f=Base.return_types(f,AT)
-    if length(type_f)==0Ű
+    if length(type_f)==0
         error("The input of the function is not compatible with the provided axes")
     else
         RTf=type_f[1];#Return Type of f
@@ -258,7 +271,7 @@ function MDBM_Problem(f::Function, a::Vector{<:AbstractVector};constraint::Funct
         fun=f;
         cons=constraint;
     end
-    MDBM_Problem(fun,cons,mdbmaxes,Vector{NCube{Int64,Float64}}(undef, 0))
+    MDBM_Problem(fun,cons,axes,Vector{NCube{Int64,Float64}}(undef, 0))
 end
 
 
@@ -266,10 +279,8 @@ end
 
 #TODO: vagy kockánként kellene csinálni?
 function _interpolate!(mdbm,::Type{Val{0}})
-    print("0 cuccc happening")
     issignchangeforeveryfunction=(ncube)->
     all(
-
         [
             [
             any((c)->isless(c[fi],zero(c[fi])),ncube[1])
@@ -295,13 +306,12 @@ end
 
 
 function _interpolate!(mdbm,::Type{Val{1}})
-    print("1 cuccc happening")
     Ndim=length(mdbm.axes)
     # TAntansp=A=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:k]...)][:]...);
     # #     TAn2=inv(TAn.'*TAn);
     # #     TAtrafo=TAn2*TAn.';
     # TAtrafo = (TAntansp* transpose(TAntansp) ) \ TAntansp
-    TAtrafoSHORT=A=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:Ndim]...)][:]...)./(2^Ndim);
+    TAtrafoSHORT=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:Ndim]...)][:]...)./(2^Ndim);
     # norm(TAtrafo-TAtrafoSHORT)
 
 
@@ -327,14 +337,14 @@ function _interpolate!(mdbm,::Type{Val{1}})
 
             #for c---if needed: that is- close to the boundary--------
             for kf=1:length(fcvals[2][1])
-                if any((c)->isless(c[kf],zero(c[kf])),fcvals[2])
+                if any((c)->isless(c[kf],zero(c[kf])),fcvals[2]) && length(As)<length(mdbm.axes)  # use a constraint till it reduces the dimension to zero (point) and no further
                     solloc =TAtrafoSHORT*[fcvals[2][kcube][kf] for kcube=1:length(fcvals[2])]
                     push!(As,solloc[1]);#it is not a real distance within the n-cube (it is ~n*A)!!!
                     push!(ns,solloc[2:end]);
                 end
             end
             nsMAT=hcat(ns...)
-            #nc.posinterp[:] .= nsMAT * ((transpose(nsMAT) * nsMAT) \ As);
+            nc.posinterp[:] .= nsMAT * ((transpose(nsMAT) * nsMAT) \ As);
             nc.posinterp[:] .= nsMAT * (inv(transpose(nsMAT) * nsMAT) * As);
             #for c---------------------
         else
@@ -359,34 +369,65 @@ function interpolate!(mdbm::MDBM_Problem;interpolationorder::Int=1)
 end
 
 function getcornerval(mdbm::MDBM_Problem)#get it for all
-    [
-    getcornerval(nc,mdbm)
-            for nc in mdbm.ncubes]
+    getcornerval.(mdbm.ncubes,Ref(mdbm))
 end
 # function mdbmcall(mdbm::MDBM_Problem,x)
 #     [mdbm.f(x...,),mdbm.c(x...,)]
 # end
 
-function getcornerval(nc::NCube{IT,FT} where IT where FT,mdbm::MDBM_Problem)
- [
+
+
+
+
+
+
+
+
+
+function getcornerval2(nc::NCube{IT,FT} where IT where FT,mdbm::MDBM_Problem)
+ (
     [
-    mdbm.f.((mdbm.axes).(x...,)...,)
+    ((mdbm.axes).(x...,)...,)
     for x in
         Iterators.product(
         [(nc.corner[n],nc.corner[n]+nc.size[n])
-        for n in 1:length(nc.corner)]
+        for n in eachindex(nc.corner)]
             ...,)
-            ][:]
+            ]
 ,
     [
-    mdbm.c.((mdbm.axes).(x...,)...,)
+    ((mdbm.axes).(x...,)...,)
     for x in
         Iterators.product(
         [(nc.corner[n],nc.corner[n]+nc.size[n])
-        for n in 1:length(nc.corner)]
+        for n in eachindex(nc.corner)]
             ...,)
-            ][:]
-]
+            ]
+)
+end
+
+
+
+function getcornerval(nc::NCube{IT,FT} where IT where FT,mdbm::MDBM_Problem)
+ (
+    [
+    mdbm.f.((mdbm.axes).(x...,)...,)::typeof(mdbm.f).parameters[1]
+    for x in
+        Iterators.product(
+        [(nc.corner[n],nc.corner[n]+nc.size[n])
+        for n in eachindex(nc.corner)]
+            ...,)
+            ]
+,
+    [
+    mdbm.c.((mdbm.axes).(x...,)...,)::typeof(mdbm.c).parameters[1]
+    for x in
+        Iterators.product(
+        [(nc.corner[n],nc.corner[n]+nc.size[n])
+        for n in eachindex(nc.corner)]
+            ...,)
+            ]
+)
 end
 
 

@@ -24,7 +24,7 @@ println("-................")
 include("MDBM__types.jl")
 
 ax1=Axis(-5:5.0,"x")
-ax2=Axis(-7:1:7.0,"y")
+ax2=Axis(Float16.(-7:1:7.0),"y")
 ax3=Axis(-3:3.0,"z")
 
 # ax1=Axis(1:5.0,"x")
@@ -48,12 +48,12 @@ axdoubling!.(mdbmaxes)
 # println(prod([length(mdbmaxes[i].ticks) for i in 1:3]))
 @time mdbm=MDBM_Problem(f,mdbmaxes)
 @time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c)
-@time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c,memoization=false)
+# @time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c,memoization=false)
 # @time mdbm=MDBM_Problem(f,mdbmaxes)
 # @time interpolate!(mdbm,interpolationorder=0)
 @time interpolate!(mdbm,interpolationorder=1)
 
-for k=1:2
+for k=1:4
 println("-................")
 @time refine!(mdbm)
 @time interpolate!(mdbm,interpolationorder=1)
@@ -70,3 +70,67 @@ scatter(x,y,size = (2700, 2700))
 
 
 # szemét--------------------------------
+
+println("<<<<<<<<<<<<<<<<<<")
+nc=mdbm.ncubes[2]
+@code_warntype getcornerval2(nc,mdbm)
+# mdbm.ncubes[2].size[:]=mdbm.ncubes[2].size.÷2
+println(".................----------------------<<<<<<<<<<<<<<<<<<")
+@code_warntype getcornerval(mdbm)
+# @code_llvm getcornerval(mdbm)
+
+
+mdbm.axes
+println(".................----------------------<<<<<<<<<<<<<<<<<<")
+@code_warntype mdbm.c(1.2,3.2,7.2)
+
+@code_warntype mdbm.axes(11,11,1)
+
+cf=mdbm.axes(11,1,1)
+@code_warntype mdbm.f(cf...)
+@code_warntype allcorner(nc)
+
+# using Makie
+# scene = Scene()
+# scene = scatter(x, y, color = colors)
+
+
+    # plot!(title = "New Title", xlabel = "New xlabel", ylabel = "New ylabel")
+    # plot!(xlims = (0, 5.5), ylims = (-2.2, 6), xticks = 0:0.5:10, yticks = [0,1,5,10])
+    #
+    # # or using magic:
+    # plot!(xaxis = ("mylabel", :log10, :flip))
+    # xaxis!("mylabel", :log10, :flip)
+
+
+#     @time getinterpolatedpoint(mdbm)
+println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+@code_warntype getinterpolatedpoint(mdbm)
+
+
+
+
+
+
+
+
+
+# ax1=Axis([[0.0,1.0],[1.0,1.1]],"x")
+# ax2=Axis(-7:1:7.0,"y")
+#
+# mdbmaxes=[ax1,ax2]
+#
+# function f(x,y)
+#     [x*[1,y]]
+# end
+# interporder=1;#0
+#
+# @time mdbm=MDBM_Problem(f,mdbmaxes)
+# @time interpolate!(mdbm,interpolationorder=interporder)
+# for kstep=1:8
+#     @time refine!(mdbm)
+#     @time interpolate!(mdbm,interpolationorder=interporder)
+# end
+# x,y=getinterpolatedpoint(mdbm)
+# println(length(x))
+# scatter(x,y,size = (2700, 2700))
