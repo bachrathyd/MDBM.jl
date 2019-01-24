@@ -23,58 +23,50 @@ println("-................")
 
 include("MDBM__types.jl")
 
-ax1=Axis(1:6.0,"x")
-ax2=Axis(10:10:30.0,"y")
-ax3=Axis([100,200.0],"z")
+ax1=Axis(-5:5.0,"x")
+ax2=Axis(-7:1:7.0,"y")
+ax3=Axis(-3:3.0,"z")
+
+# ax1=Axis(1:5.0,"x")
+# ax2=Axis(10:10:80.0,"y")
+# ax3=Axis(1:10.0,"z")
 
 mdbmaxes=[ax1,ax2,ax3]
 
 function f(x,y,z)
-    [x,y]
+    [x*x+y*y+z*z-2.0*2.0,x+y+z*2.0]
 end
 
 function c(x,y,z)
-    y
+    [y,x+1.5]
 end
 
+# [mdbm.f,mdbm.c].(1.2,2.3,4.5)
+# mdbm.c.memoryacc[1]
 
-mdbm=MDBM_Problem(f,mdbmaxes)
+axdoubling!.(mdbmaxes)
+# println(prod([length(mdbmaxes[i].ticks) for i in 1:3]))
+@time mdbm=MDBM_Problem(f,mdbmaxes)
+@time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c)
+@time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c,memoization=false)
+# @time mdbm=MDBM_Problem(f,mdbmaxes)
+# @time interpolate!(mdbm,interpolationorder=0)
+@time interpolate!(mdbm,interpolationorder=1)
 
-mdbm=MDBM_Problem(f,a)
-
-
-a=[1:6.0,10:10:30.0,[100,200.0]]
-mdbm=MDBM_Problem((x,y,z)->Float64((x^2+y^2.0-1.0)),a)
-
-
-
-
-ccc=[(mdbm.ncubes[end].corner[n],mdbm.ncubes[end].corner[n]+mdbm.ncubes[end].size[n]) for n in 1:length(mdbm.ncubes[end].corner)]
-
-[(mdbm.f).((mdbm.axes).(x)...) for x in Iterators.product(ccc...)]
-
-
-fvals=Vector
-for nc in mdbm.ncubes
-println(
- [
- (mdbm.f).((mdbm.axes).(x)...)
- for x in
- Iterators.product(
-             [(nc.corner[n],nc.corner[n]+nc.size[n])
-             for n in 1:length(nc.corner)]
-     ...)
- ][:][:]
- )
+for k=1:2
+println("-................")
+@time refine!(mdbm)
+@time interpolate!(mdbm,interpolationorder=1)
+println("-...==========......")
 end
 
+using Plots
+gr()
+# plotlyjs()
+# unicodeplots()
+x,y,z=getinterpolatedpoint(mdbm)
+scatter(x,y,size = (2700, 2700))
 
-map((x,y)->x.ticks[y], mdbm.axes,(1,2,1))
-(mdbm.axes).(ccc)
 
 
-(mdbm.ncubes[7].corner...)
-(x->(x.corner).(mdbm.ncubes)
-[(x->(x.corner...)).(mdbm.ncubes)]|>(mdbm.f)
-
-mdbm.f(1.3,1.2)
+# szemét--------------------------------
