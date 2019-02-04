@@ -9,7 +9,6 @@ struct MDBMcontainer{RT,AT}
 end
 
 
-
 # function (fs::Vector{<:Function})(arg...,)
 #     [f(arg...,) for f in fs]
 # end
@@ -144,11 +143,44 @@ function Axis(a::Axis)
     a
 end
 
-
+#
 function (axes::Vector{Axis})(is...)
-    (mdbm.axes[i].ticks[iv] for (i,iv) in enumerate(is))
+    [mdbm.axes[i].ticks[iv] for (i,iv) in enumerate(is)]
 end
 
+
+function (ax::Vector{Axis})(Coords::Vector{Integer})
+    try
+        # println(i)
+        [ax(i).ticks[Coords[i]] for i in 1:length(ax)]
+        # [ax(i).ticks[Coords[i,ki]] for i in 1:length(ax), ki in 1:size(Coords,2)]
+
+
+# for i in 1:length(ax)
+#     for ki in 1:size(Coords,2)
+#         ax(i).ticks[Coords[i,ki]]
+#     end
+# end
+        # map((x,y)->x.ticks[y], axes,i)
+    catch
+        println("FUCKer!")
+        # println("the number of indexes ($(length(Coords))) in not compatible with the length of axes ($(length(ax)))")
+        # println(Coords)
+        # ((x)->println(length(x.ticks))).(ax)
+    end
+end
+
+# function (axes::Vector{Axis})(i...,)
+#     try
+#         # println(i)
+#         map((x,y)->x.ticks[y], axes,i)
+#     catch
+#         println("FUCK!")
+#         println("the number of indexes ($(length(i))) in not compatible with the length of axes ($(length(axes)))")
+#         println(i)
+#         ((x)->println(length(x.ticks))).(axes)
+#     end
+# end
 
 struct NCube{IT<:Integer,FT<:AbstractFloat}
     corner::Vector{IT} #"bottom-left" #Integer index of the axis
@@ -158,19 +190,61 @@ struct NCube{IT<:Integer,FT<:AbstractFloat}
     # curvnorm::Vector{T}
 end
 
-function allcorner(nc::NCube{IT,FT})  where IT where FT
-    T = Array{IT}(undef,0, 1)
-    for kdim = 1:length(nc.corner)
-        T = hcat([T;zeros(IT,1, 2^(kdim - 1))], [T;ones(IT,1, 2^(kdim - 1))]);
-    end
-    TS=SMatrix{length(nc.corner),2^length(nc.corner)}(T)
-
-    nc.corner::Vector{IT}.+((TS).*(nc.size::Vector{IT}))
+function allcorner(nc::NCube{IT,FT},T01) where IT where FT
+# function allcorner(nc::NCube,T01)
+    # nc.corner::Vector{IT}.+((T01).*(nc.size::Vector{IT}))
+        (nc.corner.+((T01).*(nc.size)))::Array{IT,2}
 end
+
+
 # TOOD: egyszerűsíteni a létrehozást (bár lehet, hogy nem kell, csak 1-2 helyen fog szerepelni (max))
 # function NCube{IT<:Integer,FT<:AbstractFloat}(x::Vector{IT}) where IT where FT
 #     NCube(IT.(x),ones(IT,length(x)),Vector{FT}(undef,length(x)))
 # end
+
+
+# function Tmaker(valk::Val{1})
+#     SMatrix{2, 1}(false, true)
+# end
+#
+# function Tmaker(valk::Val{2})
+#     SMatrix{2, 4}([false, false, true, false, false, true, true, true])
+# end
+# function Tmaker(valk::Val{3})
+#     SMatrix{3, 8}([false, false, false, true, false, false, false, true, false, true, true,
+#                 false, false, false, true, true, false, true, false, true, true, true, true, true])
+# end
+# function Tmaker(valk::Val{4})
+#     SMatrix{4, 16}([false, false, false, false, true, false, false, false, false, true, false,
+#     false, true, true, false, false, false, false, true, false, true, false, true, false, false,
+#     true, true, false, true, true, true, false, false, false, false, true, true, false, false, true,
+#     false, true, false, true, true, true, false, true, false, false, true, true, true, false, true,
+#     true, false, true, true, true, true, true, true, true])
+# end
+# function Tmaker(valk::Val{5})
+#     SMatrix{5, 32}([false, false, false, false, false, true, false, false, false, false, false, true,
+#     false, false, false, true, true, false, false, false, false, false, true, false, false, true,
+#      false, true, false, false, false, true, true, false, false, true, true, true, false, false,
+#       false, false, false, true, false, true, false, false, true, false, false, true, false, true,
+#        false, true, true, false, true, false, false, false, true, true, false, true, false, true,
+#         true, false, false, true, true, true, false, true, true, true, true, false, false, false,
+#          false, false, true, true, false, false, false, true, false, true, false, false, true,
+#           true, true, false, false, true, false, false, true, false, true, true, false, true,
+#            false, true, false, true, true, false, true, true, true, true, false, true, false,
+#             false, false, true, true, true, false, false, true, true, false, true, false, true,
+#              true, true, true, false, true, true, false, false, true, true, true, true, false,
+#               true, true, true, false, true, true, true, true, true, true, true, true, true])
+# end
+@generated twopow(::Val{n}) where n = 2^n
+function T01maker(valk::Val{kdim}) where {kdim}
+    T01=[isodd(x÷(2^y)) for y in 0:(kdim-1), x in 0:(2^kdim-1)]
+    SMatrix{kdim,twopow(valk)}(T01)
+end
+
+function T11pinvmaker(valk::Val{kdim}) where {kdim}
+    T11pinv=([isodd(x÷(2^y)) for y in 0:kdim , x in 0:(2^kdim-1)]*2.0 .-1.0)/(2^kdim)
+    SMatrix{kdim+1,twopow(valk)}(T11pinv)
+end
 
 
 struct MDBM_Problem
@@ -178,36 +252,21 @@ struct MDBM_Problem
     c::Function
     axes::Vector{Axis}
     ncubes::Vector{NCube}
-
-
-
-ááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááá
-    T::SMatrix..................#TODO: id kirakni!!!!
-
-    ezt:
-    T = Array{IT}(undef,0, 1)
-    for kdim = 1:length(nc.corner)
-        T = hcat([T;zeros(IT,1, 2^(kdim - 1))], [T;ones(IT,1, 2^(kdim - 1))]);
-    end
-
-ááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááááá
-
-
+    T01::SMatrix
+    T11pinv::SMatrix
 
     function MDBM_Problem(f,c,axes,ncubes::Vector{NCube{IT,FT}}) where IT where FT
-        #new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),zeros(FT,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:])
-        new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),Vector{FT}(undef,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:])
-    end
-end
+        Ndim=length(axes)
+        # T01=reshape([isodd(x÷(2^y)) for x in 0:(2^Ndim-1) for y in 0:(Ndim-1)],Ndim,(2^Ndim))
+        # T11=reshape([isodd(x÷(2^y)) for x in 0:(2^Ndim-1) for y in 0:Ndim],Ndim+1,(2^Ndim))*2.0 .-1.0
+        # T11pinv=T11/(2^Ndim)
+        T01=T01maker(Val(Ndim))
+        T11pinv=T11pinvmaker(Val(Ndim))
 
-function (axes::Vector{Axis})(i...,)
-    try
-        map((x,y)->x.ticks[y], axes,i)
-    catch
-        println("FUCK!")
-        println("the number of indexes ($(length(i))) in not compatible with the length of axes ($(length(axes)))")
-        println(i)
-        ((x)->println(length(x.ticks))).(axes)
+        #new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),zeros(FT,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:])
+        new(f,c,axes,
+        [NCube(IT.([x...]),ones(IT,length(x)),Vector{FT}(undef,Ndim)) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:]
+        ,T01,T11pinv)
     end
 end
 
@@ -275,6 +334,16 @@ function MDBM_Problem(f::Function, a::Vector{<:AbstractVector};constraint::Funct
 end
 
 
+# #TODO: itt is van probléma
+function allcorner3(mdbm::MDBM_Problem)
+    # kdim=length(mdbm.axes)
+     # [allcorner(nc,mdbm.T01::SMatrix{kdim,twopow(Val(kdim))}) for nc in mdbm.ncubes]
+    typeof( collect(allcorner(nc,mdbm.T01) for nc in mdbm.ncubes) )
+     collect(allcorner(nc,mdbm.T01) for nc in mdbm.ncubes)
+    #allcorner.(mdbm.ncubes,Ref(mdbm.T01))
+end
+
+
 
 
 #TODO: vagy kockánként kellene csinálni?
@@ -306,16 +375,13 @@ end
 
 
 function _interpolate!(mdbm,::Type{Val{1}})
-    Ndim=length(mdbm.axes)
-    # TAntansp=A=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:k]...)][:]...);
-    # #     TAn2=inv(TAn.'*TAn);
-    # #     TAtrafo=TAn2*TAn.';
-    # TAtrafo = (TAntansp* transpose(TAntansp) ) \ TAntansp
-    TAtrafoSHORT=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:Ndim]...)][:]...)./(2^Ndim);
-    # norm(TAtrafo-TAtrafoSHORT)
-
-
-
+    # Ndim=length(mdbm.axes)
+    # # TAntansp=A=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:k]...)][:]...);
+    # # #     TAn2=inv(TAn.'*TAn);
+    # # #     TAtrafo=TAn2*TAn.';
+    # # TAtrafo = (TAntansp* transpose(TAntansp) ) \ TAntansp
+    # TAtrafoSHORT=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:Ndim]...)][:]...)./(2^Ndim);
+    #
     for nc in mdbm.ncubes
         fcvals=getcornerval(nc,mdbm)
 
@@ -323,28 +389,28 @@ function _interpolate!(mdbm,::Type{Val{1}})
             any((c)->isless(zero(c[fi]),c[fi]),fcvals[2])
             for fi in 1:length(fcvals[2][1])
             ])# do wh have to compute at all?!?!?! ()
-
+            #
             TF=typeof(nc).parameters[2]
             As = Vector{TF}(undef,0)
             ns = Vector{SVector{length(mdbm.axes),TF}}(undef,0)
 
             #for f---------------------
             for kf=1:length(fcvals[1][1])
-                solloc=TAtrafoSHORT*[fcvals[1][kcube][kf] for kcube=1:length(fcvals[1])]
-                push!(As,solloc[1]);#it is not a real distance within the n-cube (it is ~n*A)!!!
-                push!(ns,solloc[2:end]);
+                solloc=mdbm.T11pinv*[fcvals[1][kcube][kf] for kcube=1:length(fcvals[1])]
+                push!(As,solloc[end]);#it is not a real distance within the n-cube (it is ~n*A)!!!
+                push!(ns,solloc[1:end-1])
             end
 
             #for c---if needed: that is- close to the boundary--------
             for kf=1:length(fcvals[2][1])
                 if any((c)->isless(c[kf],zero(c[kf])),fcvals[2]) && length(As)<length(mdbm.axes)  # use a constraint till it reduces the dimension to zero (point) and no further
-                    solloc =TAtrafoSHORT*[fcvals[2][kcube][kf] for kcube=1:length(fcvals[2])]
-                    push!(As,solloc[1]);#it is not a real distance within the n-cube (it is ~n*A)!!!
-                    push!(ns,solloc[2:end]);
+                    solloc=mdbm.T11pinv*[fcvals[2][kcube][kf] for kcube=1:length(fcvals[2])]
+                    push!(As,solloc[end]);#it is not a real distance within the n-cube (it is ~n*A)!!!
+                    push!(ns,solloc[1:end-1])
                 end
             end
             nsMAT=hcat(ns...)
-            nc.posinterp[:] .= nsMAT * ((transpose(nsMAT) * nsMAT) \ As);
+            #nc.posinterp[:] .= nsMAT * ((transpose(nsMAT) * nsMAT) \ As);
             nc.posinterp[:] .= nsMAT * (inv(transpose(nsMAT) * nsMAT) * As);
             #for c---------------------
         else
@@ -376,58 +442,50 @@ end
 # end
 
 
-
-
-
-
-
-
+#
+#
+#
+# function getcornerval2(nc::NCube{IT,FT} where IT where FT,mdbm::MDBM_Problem)
+#  (
+#     [
+#     ((mdbm.axes).(x...,)...,)
+#     for x in
+#         Iterators.product(
+#         [(nc.corner[n],nc.corner[n]+nc.size[n])
+#         for n in eachindex(nc.corner)]
+#             ...,)
+#             ]
+# ,
+#     [
+#     ((mdbm.axes).(x...,)...,)
+#     for x in
+#         Iterators.product(
+#         [(nc.corner[n],nc.corner[n]+nc.size[n])
+#         for n in eachindex(nc.corner)]
+#             ...,)
+#             ]
+# )
+# end
 
 
 function getcornerval2(nc::NCube{IT,FT} where IT where FT,mdbm::MDBM_Problem)
- (
-    [
-    ((mdbm.axes).(x...,)...,)
-    for x in
-        Iterators.product(
-        [(nc.corner[n],nc.corner[n]+nc.size[n])
-        for n in eachindex(nc.corner)]
-            ...,)
-            ]
-,
-    [
-    ((mdbm.axes).(x...,)...,)
-    for x in
-        Iterators.product(
-        [(nc.corner[n],nc.corner[n]+nc.size[n])
-        for n in eachindex(nc.corner)]
-            ...,)
-            ]
-)
+    #Ti=[allcorner(x,mdbm.T01) for x in mdbm.ncubes]
+    # Ti=allcorner.(mdbm.ncubes,Ref(mdbm.T01,1)
+    T=allcorner(nc,mdbm.T01)
+    Tpos=[mdbm.axes(T[:,i]...) for i in 1:size(T,2)]
+
 end
 
-
-
 function getcornerval(nc::NCube{IT,FT} where IT where FT,mdbm::MDBM_Problem)
- (
-    [
-    mdbm.f.((mdbm.axes).(x...,)...,)::typeof(mdbm.f).parameters[1]
-    for x in
-        Iterators.product(
-        [(nc.corner[n],nc.corner[n]+nc.size[n])
-        for n in eachindex(nc.corner)]
-            ...,)
-            ]
-,
-    [
-    mdbm.c.((mdbm.axes).(x...,)...,)::typeof(mdbm.c).parameters[1]
-    for x in
-        Iterators.product(
-        [(nc.corner[n],nc.corner[n]+nc.size[n])
-        for n in eachindex(nc.corner)]
-            ...,)
-            ]
-)
+    #Ti=[allcorner(x,mdbm.T01) for x in mdbm.ncubes]
+    # Ti=allcorner.(mdbm.ncubes,Ref(mdbm.T01,1)
+    T=allcorner(nc,mdbm.T01)
+    Tpos=[mdbm.axes(T[:,i]...) for i in 1:size(T,2)]
+    (
+    [mdbm.f(Tpos[i]...) for i in 1:size(Tpos,1)]
+    ,
+    [mdbm.c(Tpos[i]...) for i in 1:size(Tpos,1)]
+    )
 end
 
 
