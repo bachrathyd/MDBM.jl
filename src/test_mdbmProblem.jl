@@ -1,53 +1,60 @@
+# include("MDBM__types.jl")
+# # ~~~~~~~~~~~~~~~~~~~~~~~
+# ax1=Axis(1:20)
+# ax2=Axis(1:20)
+# ax3=Axis(1:-1:-20)
+#
+# mdbmaxes=[ax1,ax2,ax3]
+#
+# foo1=(mdbmaxes)->[NCube([x[1]...],ones(Int64,length(x[1])),zeros(Float64,length(x[1])))
+#     for x in Iterators.partition(Iterators.product((x->eachindex(x.ticks)).(mdbmaxes)...),1)]
+# foo2=(mdbmaxes)->[NCube(Int16.([x...]),ones(Int16,length(x)),zeros(Float64,length(x)))
+#     for x in Iterators.product((x->eachindex(x.ticks)).(mdbmaxes)...)][:]
+# foo3=(mdbmaxes)->[NCube(Int16.([x...]),ones(Int16,length(x)),zeros(Float64,length(x)))
+#                  for x in Iterators.product((x->eachindex(x.ticks)).(mdbmaxes)...)]|>vec
+# println("-<<<<<<<<>>>>>>>>>>>--")
+# @time foo1(mdbmaxes)
+# @time foo2(mdbmaxes)
+# @time foo3(mdbmaxes)
+# println("-................")
+#
+# # ~~~~~~~~~~~~~~~~~~~~~~~
+
+
 include("MDBM__types.jl")
-# ~~~~~~~~~~~~~~~~~~~~~~~
-ax1=Axis(1:20)
-ax2=Axis(1:20)
-ax3=Axis(1:-1:-20)
-
-mdbmaxes=[ax1,ax2,ax3]
-
-foo1=(mdbmaxes)->[NCube([x[1]...],ones(Int64,length(x[1])),zeros(Float64,length(x[1])))
-    for x in Iterators.partition(Iterators.product((x->eachindex(x.ticks)).(mdbmaxes)...),1)]
-foo2=(mdbmaxes)->[NCube(Int16.([x...]),ones(Int16,length(x)),zeros(Float64,length(x)))
-    for x in Iterators.product((x->eachindex(x.ticks)).(mdbmaxes)...)][:]
-foo3=(mdbmaxes)->[NCube(Int16.([x...]),ones(Int16,length(x)),zeros(Float64,length(x)))
-                 for x in Iterators.product((x->eachindex(x.ticks)).(mdbmaxes)...)]|>vec
-println("-<<<<<<<<>>>>>>>>>>>--")
-@time foo1(mdbmaxes)
-@time foo2(mdbmaxes)
-@time foo3(mdbmaxes)
-println("-................")
-
-# ~~~~~~~~~~~~~~~~~~~~~~~
-
-
-include("MDBM__types.jl")
-
-ax1=Axis(-5:5.0,"x")
-ax2=Axis(Float16.(-7:1:7.0),"y")
+#TDOO: WTF
+# ax1=Axis((-5,5),"x")
+# ax1=Axis("asdf","ppp")
+ax1=Axis([-5,0,3,5],"x")
+ax2=Axis(Float16,(-7:1:7.0))
 ax3=Axis(-3:3.0,"z")
+#TODO: példában megmutatni, de szólni, hogy nem lehet int (interpolálni kell tudni)
+# ax3=Axis([[1,5],[2,3.0]],"z")
+# ax3=Axis(Int64,-3:4,"z")
 
 mdbmaxes=[ax1,ax2,ax3]
+axdoubling!.(mdbmaxes)
 function f(x,y,z)
-    [x*x+y*y+z*z-2.0*2.0,x+y+z*2.0]
+    [x*x+y*y+z*z-2.0*2.0,(x+y+z*2.0)>0.0]
 end
 function c(x,y,z)
-    [y,x+1.5]
+    x#[y,x+1.5]
 end
 
 @time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c)
+@code_warntype MDBM_Problem(f,mdbmaxes,constraint=c)
+
+# ax1=Axis(-5:5.0,"x")
+# ax2=Axis(Float16.(-7:1:7.0),"y")
+#
+# mdbmaxes=[ax1,ax2]
+# function f(x,y)
+#     [x-y,y-1]
+# end
+#
+# @time mdbm=MDBM_Problem(f,mdbmaxes)
 
 
-
-ax1=Axis(-5:5.0,"x")
-ax2=Axis(Float16.(-7:1:7.0),"y")
-
-mdbmaxes=[ax1,ax2]
-function f(x,y)
-    [x-y,y-1]
-end
-
-@time mdbm=MDBM_Problem(f,mdbmaxes)
 # [mdbm.f,mdbm.c].(1.2,2.3,4.5)
 # mdbm.c.memoryacc[1]
 
@@ -59,8 +66,8 @@ end
 # @time interpolate!(mdbm,interpolationorder=0)
 @time interpolate!(mdbm,interpolationorder=1)
 
-for k=1:4
 println("-................")
+for k=1:4
 @time refine!(mdbm)
 @time interpolate!(mdbm,interpolationorder=1)
 println("-...==========......")
@@ -75,24 +82,30 @@ x,y=getinterpolatedpoint(mdbm)
 scatter(x,y)
 
 
-    [
-        mdbm.axes[i].ticks[nc.corner[i]]*(1-(nc.posinterp[i]+1)/2)+
-        mdbm.axes[i].ticks[nc.corner[i]+1]*((nc.posinterp[i]+1)/2)
 
-for i in 1:length(mdbm.axes)]
 
 # szemét--------------------------------
+# @time mdbm.fc(1.0,2.0,2.0)
+# @time mdbm.fc(1.0,2.0,rand(Float64,1)...)
+# @time mdbm.fc(1.0,2.0,3.0)
+#
+#
+# @code_warntype mdbm.fc(1.0,2.0,3.0)
+# @code_warntype mdbm.fc(1.0,2.0,rand(Float64,1)...)
+
 
 println("<<<<<<<<<<<<<<<<<<")
 nc=mdbm.ncubes[1]
 
 
 
-@code_warntype getcornerval(nc,mdbm)
-# mdbm.ncubes[2].size[:]=mdbm.ncubes[2].size.÷2
-println(".................----------------------<<<<<<<<<<<<<<<<<<")
-@code_warntype getcornerval2(nc,mdbm)
+@code_warntype allcorner(nc,mdbm.T01)
+@code_warntype mdbm.axes(3,4,2)
+println(".................----------------------<<<<<<<<<<<<<<<<<<"),
 
+map(mdbm.axes,[1,1,3])
+@code_warntype getcornerval(mdbm)
+@time _interpolate!(mdbm,Val{1})
 
 # @code_llvm getcornerval(mdbm)
 
@@ -104,6 +117,12 @@ println(".................----------------------<<<<<<<<<<<<<<<<<<")
 @code_warntype mdbm.axes(11,11,1)
 @code_warntype mdbm.axes([11,11,1]...)
 T=allcorner(nc,mdbm.T01)
+    fcvals=getcornerval(nc,mdbm)
+    fcvals[1]
+    kf=1
+
+        solloc=mdbm.T11pinv*[fcvals[1][kcube][kf] for kcube=1:length(fcvals[1])]
+        [fcvals[1][:][kf]]
 
 Ndim=3
 T01=[[isodd(x÷(2^y)) for y in 0:(Ndim-1)] for x in 0:(2^Ndim-1) ]
@@ -137,3 +156,52 @@ kdim=2
 typeof(Tmaker(2))
 
 #zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+axtest=Axis([Float32.([1.0,0.0]),Float32.([1.0,3.0])],"vec")
+# axtest=Axis([0.0,3.0],"scal")
+axdoubling!(axtest)
+ax2=Axis(Float16.(-7:1:7.0),"y")
+
+mdbmaxes=[axtest,ax2]
+function f(x,y)
+    (norm(x)-y)>0.0
+end
+# function f(x,y)
+#     sqrt(1.0+x*x)-y
+# end
+
+@time mdbm=MDBM_Problem(f,mdbmaxes)
+# [mdbm.f,mdbm.c].(1.2,2.3,4.5)
+# mdbm.c.memoryacc[1]
+
+# println(prod([length(mdbmaxes[i].ticks) for i in 1:3]))
+# @time mdbm=MDBM_Problem(f,mdbmaxes)
+# @time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c)
+# @time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c,memoization=false)
+# @time mdbm=MDBM_Problem(f,mdbmaxes)
+# @time interpolate!(mdbm,interpolationorder=0)
+@time interpolate!(mdbm,interpolationorder=1)
+
+println("-................")
+for k=1:4
+@time refine!(mdbm)
+@time interpolate!(mdbm,interpolationorder=1)
+println("-...==========......")
+end
+
+using Plots
+gr()
+# plotlyjs()
+# unicodeplots()
+# x,y,z=getinterpolatedpoint(mdbm)
+x,y=getinterpolatedpoint(mdbm)
+scatter(x,y)
+
+@code_warntype getinterpolatedpoint(mdbm)
+
+
+
+kdim=3
+
+T01=collect(collect(isodd(x÷(2^y)) for y in 0:(kdim-1)) for x in 0:(2^kdim-1))
+
+T01=T01maker(Val(3))
