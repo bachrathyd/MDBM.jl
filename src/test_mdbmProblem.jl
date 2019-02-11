@@ -22,6 +22,8 @@
 
 
 include("MDBM__types.jl")
+
+println("-................")
 #TDOO: WTF
 # ax1=Axis((-5,5),"x")
 # ax1=Axis("asdf","ppp")
@@ -33,16 +35,23 @@ ax3=Axis(-3:3.0,"z")
 # ax3=Axis(Int64,-3:4,"z")
 
 mdbmaxes=[ax1,ax2,ax3]
-axdoubling!.(mdbmaxes)
+
 function f(x,y,z)
-    [x*x+y*y+z*z-2.0*2.0,(x+y+z*2.0)>0.0]
+    #[x*x+y*y+z*z-2.0*2.0]
+
+    pN=10.85
+    [abs(x)^pN+abs(y)^pN+abs(z)^pN-2.0^pN]
+
+    #[x*x+y*y+z*z-2.0*2.0,(x+y+z*2.0)]#,y<0,(x+1.5)<0]
+    #[x*x+y*y+z*z-2.0*2.0,(x+y+z*2.0),y<0,(x+1.5)<0] #így is működik
 end
 function c(x,y,z)
-    x#[y,x+1.5]
+    minimum([y,x+1.5,z])
 end
 
-@time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c)
-@code_warntype MDBM_Problem(f,mdbmaxes,constraint=c)
+# @time mymdbm=MDBM_Problem(f,mdbmaxes)
+# @time mymdbm=MDBM_Problem(f,mdbmaxes,constraint=c,memoization=false)
+@time mymdbm=MDBM_Problem(f,mdbmaxes,constraint=c)
 
 # ax1=Axis(-5:5.0,"x")
 # ax2=Axis(Float16.(-7:1:7.0),"y")
@@ -64,47 +73,72 @@ end
 # @time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c,memoization=false)
 # @time mdbm=MDBM_Problem(f,mdbmaxes)
 # @time interpolate!(mdbm,interpolationorder=0)
-@time interpolate!(mdbm,interpolationorder=1)
+InterporderN=0
+@time interpolate!(mymdbm,interpolationorder=InterporderN)
 
-println("-................")
-for k=1:4
-@time refine!(mdbm)
-@time interpolate!(mdbm,interpolationorder=1)
+
+@time for k=1:5
+refine!(mymdbm)
+interpolate!(mymdbm,interpolationorder=InterporderN)
 println("-...==========......")
 end
 
 using Plots
 gr()
-# plotlyjs()
-# unicodeplots()
-# x,y,z=getinterpolatedpoint(mdbm)
-x,y=getinterpolatedpoint(mdbm)
-scatter(x,y)
 
-
-
+x,y,z=getinterpolatedpoint(mymdbm)
+println("pontins: ", length(mymdbm.ncubes))
+println("function evaluation and memo: ",[length(mymdbm.fc.fvalarg),mymdbm.fc.memoryacc[1]])
+scatter(x,y,z)
+println(length(mymdbm.fc.fvalarg)*5)
+println("datapoints: ", length(mymdbm.ncubes)*9+length(mymdbm.fc.fvalarg)*5)
 
 #--------------- szemét--------------------------------
 # @time mdbm.fc(1.0,2.0,2.0)
 # @time mdbm.fc(1.0,2.0,rand(Float64,1)...)
-# @time mdbm.fc(1.0,2.0,3.0)
-#
-#
-# @code_warntype mdbm.fc(1.0,2.0,3.0)
+# @time mdbm.fc(1.0,2.0,3.0)]#
+
+aa=mymdbm.ncubes[3]
+bb=deepcopy(mymdbm.ncubes[3])
+bb.posinterp[:]+=10.00;
+aa>=bb
+isequal(aa,bb)
+aa==bb
+@code_warntype  compa(aa,bb)
+all([a.corner==b.corner,a.size==b.size])# @code_warntype mdbm.fc(1.0,2.0,3.0)
 # @code_warntype mdbm.fc(1.0,2.0,rand(Float64,1)...)
-
-
+filter!((nc)->any(isnan.(nc.posinterp)),mymdbm.ncubes)
+nc
 println("<<<<<<<<<<<<<<<<<<")
-nc=mdbm.ncubes[1]
+nc=mymdbm.ncubes[1]
+indexin_sorted([-1,0,1,4,5,6,9,10,11],[0,1,2,3,4,5,6,7,8])
+findin([-1,0,1,4,5,6,9,10,11],[0,1,2,3,4,5,6,7,8,20])
+
+
+
+
+
+mdbm=mymdbm
+
+allcorner(nc,[-mymdbm.T01[2:end],mymdbm.T01[2.^(0:2)+1]])
+
+doubling!(mdbm,[1,1,2])
+refinecubes!(mdbm.ncubes,[1])
+
+refine!(mdbm)
 
 typeof(allcorner(nc,mdbm.T01))
 @code_warntype allcorner(nc,mdbm.T01)
 @code_warntype allcorner(mdbm.ncubes,mdbm.T01)
 
+@code_warntype getcornerval(mdbm.ncubes[2],mdbm)
+@code_warntype getcornerval(mdbm)
 
+@code_warntype map((mdbm.fc) ∘ (mdbm.axes),allcorner(nc,mdbm.T01))
 
 @code_warntype allcorner(mdbm)
 @code_warntype ((allcorner(mdbm.ncubes,mdbm.T01)))
+T=T101[1]
 @code_warntype (mdbm.axes.(allcorner(nc,mdbm.T01)))
 @code_warntype map((mdbm.axes),Base.Iterators.flatten(allcorner(mdbm)))
 typeof(map((mdbm.axes),Base.Iterators.flatten(allcorner(mdbm))))
@@ -114,7 +148,7 @@ map((mdbm.fc) ∘ (mdbm.axes),Base.Iterators.flatten(allcorner(mdbm)))
 @code_warntype map((mdbm.fc) ∘ (mdbm.axes),Base.Iterators.flatten(allcorner(mdbm)))
 @time (mdbm.fc).(map((mdbm.axes),Base.Iterators.flatten(allcorner(mdbm))))
 @time map((mdbm.fc) ∘ (mdbm.axes),Base.Iterators.flatten(allcorner(mdbm)))
-@time map((mdbm.fc) ∘ (mdbm.axes).(allcorner(mdbm)))
+
 (mdbm.fc). ((mdbm.axes).(allcorner(mdbm.ncubes[1],mdbm.T01)))
 
 @time
@@ -129,10 +163,6 @@ mdbm.fc([(2.0,Float16(1.6),3.3),(5.0,Float16(1.6),3.3),(2.0,Float16(1.6),3.3)])
 
 
 location=searchsortedfirst(mdbm.fc.fvalarg,(1.7, 1.2, 3.3),lt=(x,y)->isless(x.callargs,y));
-
-
-
-
 
 
 
@@ -212,6 +242,8 @@ axtest=Axis([Float32.([1.0,0.0]),Float32.([1.0,3.0])],"vec")
 axdoubling!(axtest)
 ax2=Axis(Float16.(-7:1:7.0),"y")
 
+using LinearAlgebra
+
 mdbmaxes=[axtest,ax2]
 function f(x,y)
     (norm(x)-y)>0.0
@@ -248,11 +280,3 @@ x,y=getinterpolatedpoint(mdbm)
 scatter(x,y)
 
 @code_warntype getinterpolatedpoint(mdbm)
-
-
-
-kdim=3
-
-T01=collect(collect(isodd(x÷(2^y)) for y in 0:(kdim-1)) for x in 0:(2^kdim-1))
-
-T01=T01maker(Val(3))

@@ -19,7 +19,7 @@ struct MemF{RTf,RTc,AT} <:Function
     c::Function
     fvalarg::Vector{MDBMcontainer{RTf,RTc,AT}}#funval,callargs
     memoryacc::Vector{Int64} #TODO: törölni, ha már nem kell
-    MemF(f::Function,c::Function,a::Vector{MDBMcontainer{RTf,RTc,AT}}) where {RTf,RTc,AT}=new{RTf,RTc,AT}(f,c,a,[Int64(0)])
+    MemF(f::Function,c::Function,cont::Vector{MDBMcontainer{RTf,RTc,AT}}) where {RTf,RTc,AT}=new{RTf,RTc,AT}(f,c,cont,[Int64(0)])
 end
 
 #------------SH version - hidden 'Any'-------------
@@ -153,6 +153,7 @@ end
 function axdoubling!(ax::Axis)
         sort!(append!(ax.ticks, ax.ticks[1:end - 1] + diff(ax.ticks) / 2))
 end
+
 # function (axes::Vector{Axis})(i...,)
 #     try
 #         # println(i)
@@ -174,19 +175,21 @@ struct NCube{IT<:Integer,FT<:AbstractFloat,ValNdim}
     # curvnorm::Vector{T}
 end
 
-function allcorner(nc::NCube{IT,FT,Ndim},T01)::Vector{MVector} where IT where FT where Ndim
+function corner(nc::NCube{IT,FT,Ndim},T01)::Vector{MVector} where IT where FT where Ndim
     [nc.corner .+ nc.size .* T for T in T01]
 end
 
 
-function allcorner(ncubes::Vector{NCube},T01)::Vector{Vector{MVector}}# where IT where FT where Ndim
-        println("asg--------------ggggggggdf")
-    println(length(ncubes))
-    [allcorner(nc,mdbm.T01) for nc in ncubes]
+function corner(ncubes::Vector{NCube},T01)::Vector{Vector{MVector}}# where IT where FT where Ndim
+    [corner(nc,T01) for nc in ncubes]
     # [nc.corner .+ nc.size .* T for nc in ncubes for T in T01]
 end
 
 
+Base.isless(a::NCube{IT,FT,N},b::NCube{IT,FT,N}) where IT where FT where N = Base.isless([a.corner,a.size],[b.corner,b.size])
+# Base.isequal(a::NCube{IT,FT,N},b::NCube{IT,FT,N}) where IT where FT where N = all([a.corner==b.corner,a.size==b.size])
+import Base.==
+==(a::NCube{IT,FT,N},b::NCube{IT,FT,N}) where IT where FT where N = all([a.corner==b.corner,a.size==b.size])
 
 
 @generated twopow(::Val{n}) where n = 2^n
@@ -233,8 +236,6 @@ struct MDBM_Problem{N}
         #new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),zeros(FT,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:])
         createAxesGetindexFunction((axes...,))
         createAxesGetindexFunctionTuple((axes...,))
-        IT=Int64
-        FT=Float64
         new{Ndim}(fc,(axes...,),
         [NCube{IT,FT,Ndim}(SVector{Ndim,IT}([x...]),SVector{Ndim,IT}(ones(IT,length(x))),SVector{Ndim,FT}(zeros(IT,length(x))),true) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:]
         ,T01,T11pinv)
@@ -302,125 +303,53 @@ end
 # end
 
 
-function allcorner(mdbm::MDBM_Problem{N})::Vector{Vector{SVector}} where N
-    # [allcorner(nc,mdbm.T01) for nc in mdbm.ncubes]
-    [allcorner(nc,mdbm.T01) for nc in mdbm.ncubes]
+function corner(mdbm::MDBM_Problem{N})::Vector{Vector{SVector}} where N
+    # [corner(nc,mdbm.T01) for nc in mdbm.ncubes]
+    [corner(nc,mdbm.T01) for nc in mdbm.ncubes]
     # [nc.corner .+ nc.size .* T for nc in mdbm.ncubes for T in mdbm.T01]
     # c3=sort!(ccc)
     # unique(ccc)
     # cccunique=Set(ccc)
 end
 
-# #TODO: vagy kockánként kellene csinálni?
-# function _interpolate!(mdbm,::Type{Val{0}})
-#     issignchangeforeveryfunction=(ncube)->
-#     all(
-#         [
-#             [
-#             any((c)->isless(c[fi],zero(c[fi])),ncube[1])
-#             for fi in 1:length(ncube[1][1])
-#             ]#any positive value
-#
-#             [
-#             any((c)->isless(zero(c[fi]),c[fi]),ncube[1])
-#             for fi in 1:length(ncube[1][1])
-#             ]#anany positive valueny positive value
-#
-#             [
-#             any((c)->isless(zero(c[fi]),c[fi]),ncube[2])
-#             for fi in 1:length(ncube[2][1])
-#             ]#if any positive valueny positive value
-#         ][:]
-#     )#chack for all
-#     isbracketing=[issignchangeforeveryfunction(c) for c in getcornerval(mdbm)]
-#     deleteat!(mdbm.ncubes,.!isbracketing)
-#     ((nc)->nc.posinterp[:].=zero(typeof(nc.posinterp).parameters[1])).(mdbm.ncubes)
-#     return nothing
-# end
-#
-#
-# function _interpolate!(mdbm,::Type{Val{1}})
-#     # Ndim=length(mdbm.axes)
-#     # # TAntansp=A=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:k]...)][:]...);
-#     # # #     TAn2=inv(TAn.'*TAn);
-#     # # #     TAtrafo=TAn2*TAn.';
-#     # # TAtrafo = (TAntansp* transpose(TAntansp) ) \ TAntansp
-#     # TAtrafoSHORT=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:Ndim]...)][:]...)./(2^Ndim);
-#     #
-#     for nc in mdbm.ncubes
-#         fcvals=getcornerval(nc,mdbm)
-#
-#         if all([
-#             any((c)->isless(zero(c[2][fi]),c[2][fi]),fcvals)
-#             for fi in 1:length(fcvals)
-#             ])# do wh have to compute at all?!?!?! ()
-#             #
-#             TF=typeof(nc).parameters[2]
-#             As = Vector{TF}(undef,0)
-#             ns = Vector{SVector{length(mdbm.axes),TF}}(undef,0)
-#
-#             #for f---------------------
-#             for kf=1:length(fcvals[1][1])
-#                 solloc=mdbm.T11pinv*[fcvals[kcube][1][kf] for kcube=1:length(fcvals)]
-#                 push!(As,solloc[end]);#it is not a real distance within the n-cube (it is ~n*A)!!!
-#                 push!(ns,solloc[1:end-1])
-#             end
-#
-#             #for c---if needed: that is- close to the boundary--------
-#             for kf=1:length(fcvals[1][2])
-#                 if any((c)->isless(c[kf],zero(c[kf])),fcvals[2]) && length(As)<length(mdbm.axes)  # use a constraint till it reduces the dimension to zero (point) and no further
-#                     solloc=mdbm.T11pinv*[fcvals[kcube][2][kf] for kcube=1:length(fcvals)]
-#                     push!(As,solloc[end]);#it is not a real distance within the n-cube (it is ~n*A)!!!
-#                     push!(ns,solloc[1:end-1])
-#                 end
-#             end
-#             nsMAT=hcat(ns...)
-#             #nc.posinterp[:] .= nsMAT * ((transpose(nsMAT) * nsMAT) \ As);
-#             nc.posinterp[:] .= nsMAT * (inv(transpose(nsMAT) * nsMAT) * As);
-#             #for c---------------------
-#         else
-#             nc.posinterp[:] .=1000.0;
-#         end
-#     end
-#
-#     #TODO: what if it falls outside of the n-cube
-#     #TODO: it should be removed ->what shall I do with the bracketing cubes?
-#      #filter!((nc)->norm(nc.posinterp,20.0)>2.0 ,mdbm.ncubes) LinearAlgebre is needed
-#      filter!((nc)->sum(nc.posinterp.^20.0)<(2.0 ^20.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
-#
-#     return nothing
-# end
+
+function issingchange(FunTupleVector::Vector)::Bool
+all(
+    [
+        [
+        any((c)->!isless(c[1][fi],zero(c[1][fi])),FunTupleVector)
+        for fi in 1:length(FunTupleVector[1][1])
+        ]#any positive (or zeros) value (!isless)
+
+        [
+        any((c)->!isless(zero(c[1][fi]),c[1][fi]),FunTupleVector)
+        for fi in 1:length(FunTupleVector[1][1])
+        ]#anany negative (or zero) value
+
+        [
+        any((c)->!isless(c[2][fi],zero(c[2][fi])),FunTupleVector)
+        for fi in 1:length(FunTupleVector[1][2])
+        ]#any positive (or zeros) value (!isless)
+    ]
+)#check for all condition
+end
 
 #TODO: vagy kockánként kellene csinálni?
-function _interpolate!(mdbm,::Type{Val{0}})
-    (mdbm.fc). ((mdbm.axes).(allcorner(mdbm.ncubes[1],mdbm.T01)))
-    issignchangeforeveryfunction=(ncube)->
-    all(
-        [
-            [
-            any((c)->isless(c[fi],zero(c[fi])),ncube[1])
-            for fi in 1:length(ncube[1][1])
-            ]#any positive value
+function _interpolate!(ncubes::Vector{NCube},mdbm::MDBM_Problem,::Type{Val{0}})
+    Ndim=length(mdbm.axes)
+    isbracketing=map(nc->issingchange(getcornerval(nc,mdbm)),ncubes)
+    deleteat!(ncubes,.!isbracketing)#removeing the non-bracketing ncubes
+    # filter!(nc->!issingchange(getcornerval(nc,mdbm)),mdbm.ncubes)
 
-            [
-            any((c)->isless(zero(c[fi]),c[fi]),ncube[1])
-            for fi in 1:length(ncube[1][1])
-            ]#anany positive valueny positive value
-
-            [
-            any((c)->isless(zero(c[fi]),c[fi]),ncube[2])
-            for fi in 1:length(ncube[2][1])
-            ]#if any positive valueny positive value
-        ][:]
-    )#check for all
-    isbracketing=[issignchangeforeveryfunction(c) for c in getcornerval(mdbm)]
-    deleteat!(mdbm.ncubes,.!isbracketing)
-    ((nc)->nc.posinterp[:].=zero(typeof(nc.posinterp).parameters[1])).(mdbm.ncubes)
+    # ((nc)->nc.posinterp[:].=zero(typeof(nc.posinterp).parameters[1])).(mdbm.ncubes) #set the interpolated relative position to zero
+    # ((nc)->nc.posinterp.*=0.0).(mdbm.ncubes) #set the interpolated relative position to zero
+    map(nc->nc.posinterp[:].=zeros(typeof(nc.posinterp[1]),Ndim), ncubes)
     return nothing
 end
 
 
-function _interpolate!(mdbm,::Type{Val{1}})
+function _interpolate!(ncubes::Vector{NCube},mdbm,::Type{Val{1}})
+    Ndim=length(mdbm.axes)
     # Ndim=length(mdbm.axes)
     # # TAntansp=A=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:k]...)][:]...);
     # # #     TAn2=inv(TAn.'*TAn);
@@ -428,124 +357,104 @@ function _interpolate!(mdbm,::Type{Val{1}})
     # # TAtrafo = (TAntansp* transpose(TAntansp) ) \ TAntansp
     # TAtrafoSHORT=hcat([[-1,x...] for x in Iterators.product([(-1.0,1.0) for k in 1:Ndim]...)][:]...)./(2^Ndim);
     #
-    for nc in mdbm.ncubes
-        fcvals=getcornerval(nc,mdbm)
+    for nc in ncubes
+        FunTupleVector=getcornerval(nc,mdbm)
 
         if all([
-            any((c)->isless(zero(c[2][fi]),c[2][fi]),fcvals)
-            for fi in 1:length(fcvals)
+            any((c)->!isless(c[2][fi],zero(c[2][fi])),FunTupleVector)
+            for fi in 1:length(FunTupleVector[1][2])
             ])# do wh have to compute at all?!?!?! ()
             #
             TF=typeof(nc).parameters[2]
             As = Vector{TF}(undef,0)
-            ns = Vector{SVector{length(mdbm.axes),TF}}(undef,0)
+            ns = Vector{SVector{Ndim,TF}}(undef,0)
 
             #for f---------------------
-            for kf=1:length(fcvals[1][1])
-                solloc=mdbm.T11pinv*[fcvals[kcube][1][kf] for kcube=1:length(fcvals)]
+            for kf=1:length(FunTupleVector[1][1])
+                solloc=mdbm.T11pinv*[FunTupleVector[kcubecorner][1][kf] for kcubecorner=1:length(FunTupleVector)]
                 push!(As,solloc[end]);#it is not a real distance within the n-cube (it is ~n*A)!!!
                 push!(ns,solloc[1:end-1])
             end
 
             #for c---if needed: that is- close to the boundary--------
-            for kf=1:length(fcvals[1][2])
-                if any((c)->isless(c[kf],zero(c[kf])),fcvals[2]) && length(As)<length(mdbm.axes)  # use a constraint till it reduces the dimension to zero (point) and no further
-                    solloc=mdbm.T11pinv*[fcvals[kcube][2][kf] for kcube=1:length(fcvals)]
+            for kf=1:length(FunTupleVector[1][2])
+                #TODO: TODO: mivan a többszörös C teljesülése esetén!?!??!
+                if any((c)->!isless(zero(c[2][kf]),c[2][kf]),FunTupleVector) && length(As)<Ndim  # use a constraint till it reduces the dimension to zero (point) and no further
+                    solloc=mdbm.T11pinv*[FunTupleVector[kcubecorner][2][kf] for kcubecorner=1:length(FunTupleVector)]
                     push!(As,solloc[end]);#it is not a real distance within the n-cube (it is ~n*A)!!!
                     push!(ns,solloc[1:end-1])
                 end
             end
+
             nsMAT=hcat(ns...)
             #nc.posinterp[:] .= nsMAT * ((transpose(nsMAT) * nsMAT) \ As);
             nc.posinterp[:] .= nsMAT * (inv(transpose(nsMAT) * nsMAT) * As);
             #for c---------------------
         else
-            nc.posinterp[:] .=1000.0;
+            nc.posinterp[:] .=1000.0;#put it outside the cube!
         end
     end
 
     #TODO: what if it falls outside of the n-cube
     #TODO: it should be removed ->what shall I do with the bracketing cubes?
      #filter!((nc)->norm(nc.posinterp,20.0)>2.0 ,mdbm.ncubes) LinearAlgebre is needed
-     filter!((nc)->sum(nc.posinterp.^20.0)<(2.0 ^20.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
+     #filter!((nc)->sum(nc.posinterp.^20.0)<(2.0 ^20.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
+     filter!((nc)->sum(nc.posinterp.^4.0)<(3.0 ^4.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
+     #filter!((nc)->!any(isnan.(nc.posinterp)),mdbm.ncubes)
 
     return nothing
 end
 
-function _interpolate!(mdbm,::Type{Val{N}}) where N
-    error("order $(N) interpolation is not supperted (yet)")
+function _interpolate!(ncubes::Vector{NCube{IT,FT,N}} where IT where FT where N,mdbm,::Type{Val{Ninterp}}) where Ninterp
+    error("order $(Ninterp) interpolation is not supperted (yet)")
 end
 
 function interpolate!(mdbm::MDBM_Problem;interpolationorder::Int=1)
-    _interpolate!(mdbm, Val{interpolationorder})
+    _interpolate!(mdbm.ncubes,mdbm, Val{interpolationorder})
 end
 
 function getcornerval(mdbm::MDBM_Problem)#get it for all
-    getcornerval.(mdbm.ncubes,Ref(mdbm))
-end
-# function mdbmcall(mdbm::MDBM_Problem,x)
-#     [mdbm.f(x...,),mdbm.c(x...,)]
-# end
-
-
-#
-#
-#
-# function getcornerval2(nc::NCube{IT,FT} where IT where FT,mdbm::MDBM_Problem)
-#  (
-#     [
-#     ((mdbm.axes).(x...,)...,)
-#     for x in
-#         Iterators.product(
-#         [(nc.corner[n],nc.corner[n]+nc.size[n])
-#         for n in eachindex(nc.corner)]
-#             ...,)
-#             ]
-# ,
-#     [
-#     ((mdbm.axes).(x...,)...,)
-#     for x in
-#         Iterators.product(
-#         [(nc.corner[n],nc.corner[n]+nc.size[n])
-#         for n in eachindex(nc.corner)]
-#             ...,)
-#             ]
-# )
-# end
-
-
-function getcornerval(nc::NCube{IT,FT} where IT where FT,mdbm::MDBM_Problem)
-    T=allcorner(nc,mdbm.T01)
-    Tpos=[mdbm.axes(T[:,i]...) for i in 1:size(T,2)]
-    [
-    mdbm.fc(Tpos[i]...) for i in 1:size(Tpos,1)
-    ]
+    #getcornerval.(mdbm.ncubes,Ref(mdbm))
+    map((mdbm.fc) ∘ (mdbm.axes),Base.Iterators.flatten(corner(mdbm)))
 end
 
+function getcornerval(ncubes::NCube{IT,FT,N} where IT where FT where N,mdbm::MDBM_Problem)
+    #PostionsVectors=(mdbm.axes.(corner(nc,mdbm.T01)))
+    # (mdbm.fc).( (mdbm.axes).(corner(nc,mdbm.T01)) )
+    map((mdbm.fc) ∘ (mdbm.axes),corner(ncubes,mdbm.T01))
+end
 
-function refine!(mdbm::MDBM_Problem)
+function doubling!(mdbm::MDBM_Problem,directions::Vector{T}) where T<:Integer
     axdoubling!.(mdbm.axes)
-    [nc.corner[:].=((nc.corner .-1.0) .*2.0 .+1.0 )   for nc in mdbm.ncubes]
-    [nc.posinterp[:].=Vector{typeof(nc.posinterp[1])}(undef,length(mdbm.axes))    for nc in mdbm.ncubes]
+    for nc in mdbm.ncubes
+        for dir in directions
+            nc.corner[dir]=(nc.corner[dir] -1) *2 +1
+            nc.size[dir]*=2
+        end
+    end
+end
 
-    append!(mdbm.ncubes,vcat([
+function refine!(mdbm::MDBM_Problem{N}; directions::Vector{T}=collect(Int64,1:N)) where N where T<:Integer
+    doubling!(mdbm,directions)
+    refinencubes!(mdbm.ncubes,directions)
+    return nothing
+end
 
-       [
-
-       # push!(mdbm.ncubes,NCube(typeof(nc.corner[1]).([x...]),nc.size,Vector{typeof(nc.posinterp[1])}(undef,length(mdbm.axes))))
-        #
-       NCube(typeof(nc.corner[1]).([x...]),nc.size,Vector{typeof(nc.posinterp[1])}(undef,length(mdbm.axes)),true)
-       for x in
-           Iterators.product(
-           [(nc.corner[n],nc.corner[n]+nc.size[n])
-           for n in 1:length(nc.corner)]
-            ...,)
-            if [x...]!=nc.corner
-        ]
-    for nc in mdbm.ncubes]...))
-            #TODO:     #if nc.condition>1.0
-                 # A nem felbontottaknál pedig duplázni kell a felbontást
-return nothing
+function refinencubes!(ncubes::Vector{NCube}, directions::Vector{T}) where T<:Integer #{IT,FT,N} where IT where FT where N
+    #TODO:     #if nc.condition>1.0
+    # A nem felbontottaknál pedig duplázni kell a felbontást
+    for dir in directions
+        for nc in ncubes
+            nc.size[dir]/=2
+        end
+        NumofNCubes=length(ncubes)
+        append!(ncubes,deepcopy(ncubes))#TODO: ez így kell csinálni?
+        for nc in ncubes[1:NumofNCubes]
+            nc.corner[dir]=nc.corner[dir]+nc.size[dir]
+        end
+    end
+    sort!(ncubes)#,by=nc->[nc.corner,nc.size])
+    return nothing
 end
 
 
@@ -556,7 +465,7 @@ function getinterpolatedpoint(mdbm::MDBM_Problem)
         (mdbm.axes[i].ticks[nc.corner[i]]*(1.0-(nc.posinterp[i]+1.0)/2.0)+
         mdbm.axes[i].ticks[nc.corner[i]+1]*((nc.posinterp[i]+1.0)/2.0))
         )
-    for nc in mdbm.ncubes]::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
+    for nc in mdbm.ncubes]#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
 for i in 1:length(mdbm.axes)]
 # [
 #     [
@@ -567,60 +476,103 @@ for i in 1:length(mdbm.axes)]
 end
 
 
+function checkneighbour!(mdbm::MDBM_Problem;interpolationorder::Int=1)#only for unite size cubes
+allneighind=0:2^length(mdbm.axes)#cornering neightbour also
+allneighind=2 .^(0:(length(mdbm.axes)-1))+1#neighbour only in the side
+T101=[-mymdbm.T01[allneighind]...,mymdbm.T01[allneighind]...]
+
+compa=(a,b)->all([a.corner==b.corner,a.size==b.size])
+
+ncnew=deepcopy(mdbm.ncubes)
+ncubestocheck=deepcopy(mdbm.ncubes)
+
+ismoreneighbour=true
+#mTODO: mivan azzal a kockával, aki szomszédként leellenőriztünk, de nem tartalmazott,... majd a követés során újra mellé kerülünk -> így az kétszer lesz ellőnőrizve (ez a Matlabban is rosssz)
+while ismoreneighbour
+    NumofNCubes=length(ncnew)
+    for T in T101
+
+        append!(ncubestocheck,deepcopy(ncnew))#TODO: ez így kell csinálni?
+        for nci in 1:NumofNCubes
+            ncubestocheck[nci].corner[:]=ncubestocheck[nci].corner+1*T.*ncubestocheck[nci].size
+        end
+    end
+    sort!(ncubestocheck)
+    unique(a->[a.corner,a.size], ncubestocheck)
+    findin(ncubestocheck,mdbm.ncubes)
+end
 
 
 
 
+    sort!(ncubes)#,by=nc->[nc.corner,nc.size])
+[
+    [
+        (typeof(mdbm.axes[i].ticks).parameters[1])(
+        (mdbm.axes[i].ticks[nc.corner[i]]*(1.0-(nc.posinterp[i]+1.0)/2.0)+
+        mdbm.axes[i].ticks[nc.corner[i]+1]*((nc.posinterp[i]+1.0)/2.0))
+        )
+    for nc in mdbm.ncubes]#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
+for i in 1:length(mdbm.axes)]
+# [
+#     [
+#         (mdbm.axes[i].ticks[nc.corner[i]]*(typeof(mdbm.axes[i].ticks[1]).(1.0-(nc.posinterp[i]+1.0)/2.0))+
+#         mdbm.axes[i].ticks[nc.corner[i]+1]*(typeof(mdbm.axes[i].ticks[1]).((nc.posinterp[i]+1.0)/2.0)))
+#     for nc in mdbm.ncubes]::Vector{typeof(mdbm.axes[i].ticks[1])}
+# for i in eachindex(mdbm.axes)]
+end
 
 
-#-------------------------
+#------------------------
 
-# function indexin_sorted(a::Array{T,1}, b::Array{T,1})::Array{Int64,1} where T
-#         # b must contain all the lements of a
-#         # a and b must be sorted
-#     if isempty(a)
-#         return Array{Int64}(undef,0)
-#     elseif length(b) == 1 ##much faster!
-#         return Int64.(a .== b)#*Int64(1)
-#     else
-#         out = Array{Int64}(undef, size(a));#zeros(T, size(a))
-#         leng::Int64 = length(b);
-#
-#         q::Int64 = 1;
-#         q1::Int64 = 1;
-#         q2::Int64 = length(b);
-#         for k = 1:length(a)
-#
-#             if (q2 - q1) == 1
-#                 q = (b[q1] == a[k]) ? q1 : q2
-#             else
-#                 while (b[q] != a[k]) & (q2 > q1 + 1)
-#                     if b[q] > a[k]
-#                         q2 = q
-#                         q =  (q + q1+1) ÷ 2
-#                     else
-#                         q1 = q
-#                         q = (q + q2) ÷ 2
-#                     end
-#             #print([q1;q;q2])
-#             #print([b[q]])
-#             #println([a[k]])
-#                 end
-#             end
-#             out[k] = b[q] == a[k] ? q : 0
-#             q = max(out[k], q1)
-#             q1 = q
-#             q2 = length(b)
-#           #print("-----")
-#           #print(out[1:k])
-#           #println("----")
-#             if q1 > length(b)#all the element is larger than the last one
-#                 break
-#             end
-#         end
-#         return out
-#     end
-# end
-#
-#
-# # indexin_sorted([-5,0,1,1.1,2,3,4,9.0,11,15,1151],[1.1])
+
+
+function indexin_sorted(a::Array{T,1}, b::Array{T,1})::Array{Int64,1} where T
+        # b must contain all the lements of a
+        # a and b must be sorted
+    if isempty(a)
+        return Array{Int64}(undef,0)
+    elseif length(b) == 1 ##much faster!
+        return Int64.(a .== b)#*Int64(1)
+    else
+        out = Array{Int64}(undef, size(a));#zeros(T, size(a))
+        leng::Int64 = length(b);
+
+        q::Int64 = 1;
+        q1::Int64 = 1;
+        q2::Int64 = length(b);
+        for k = 1:length(a)
+
+            if (q2 - q1) == 1
+                q = (b[q1] == a[k]) ? q1 : q2
+            else
+                while (b[q] != a[k]) & (q2 > q1 + 1)
+                    if b[q] > a[k]
+                        q2 = q
+                        q =  (q + q1+1) ÷ 2
+                    else
+                        q1 = q
+                        q = (q + q2) ÷ 2
+                    end
+            #print([q1;q;q2])
+            #print([b[q]])
+            #println([a[k]])
+                end
+            end
+            out[k] = b[q] == a[k] ? q : 0
+            q = max(out[k], q1)
+            q1 = q
+            q2 = length(b)
+          #print("-----")
+          #print(out[1:k])
+          #println("----")
+            if q1 > length(b)#all the element is larger than the last one
+                break
+            end
+        end
+        return out
+    end
+end
+
+
+# indexin_sorted([-5,0,1,1.1,2,3,4,9.0,11,15,1151],[1.1])
