@@ -98,8 +98,8 @@ println("datapoints: ", length(mymdbm.ncubes)*9+length(mymdbm.fc.fvalarg)*5)
 # @time mdbm.fc(1.0,2.0,rand(Float64,1)...)
 # @time mdbm.fc(1.0,2.0,3.0)]#
 
-aa=mymdbm.ncubes[3]
-bb=deepcopy(mymdbm.ncubes[3])
+aa=mymdbm.ncubes[2]
+bb=deepcopy(mymdbm.ncubes[2])
 bb.posinterp[:]+=10.00;
 aa>=bb
 isequal(aa,bb)
@@ -111,14 +111,60 @@ filter!((nc)->any(isnan.(nc.posinterp)),mymdbm.ncubes)
 nc
 println("<<<<<<<<<<<<<<<<<<")
 nc=mymdbm.ncubes[1]
-indexin_sorted([-1,0,1,4,5,6,9,10,11],[0,1,2,3,4,5,6,7,8])
-findin([-1,0,1,4,5,6,9,10,11],[0,1,2,3,4,5,6,7,8,20])
-
-
-
-
 
 mdbm=mymdbm
+T101=mdbm.T01
+newbracketinncubes =mdbm.ncubes
+ncubes2check = Array{typeof(mdbm.ncubes[1])}(undef,0)
+NumofNCubes=length(newbracketinncubes)
+for iT in 1:length(T101)
+    append!(ncubes2check,deepcopy(newbracketinncubes))#TODO: ez így kell csinálni?
+    for nci in ((1+NumofNCubes*(iT-1)):(NumofNCubes+NumofNCubes*(iT-1)))
+        ncubes2check[nci].corner[:]=ncubes2check[nci].corner+T101[iT].*ncubes2check[nci].size
+            # ncubes2check[nci].corner[:]=ncubes2check[nci].corner+T.*ncubes2check[nci].size
+    end
+end
+
+
+        sort!(ncubes2check; alg=QuickSort)
+        # unique!(ncubes2check)#TODO: ez miért nem jó, pedig definiálva van az "isequal"
+        #unique!(a->[a.corner,a.size], ncubes2check) #TODO: ez csak a Julia1.1 felett van!!!
+        ncubes2check=unique(a->[a.corner,a.size], ncubes2check)
+        is_sorted_in_sorted(ncubes2check,mdbm.ncubes)
+        sum(is_sorted_in_sorted(ncubes2check,mdbm.ncubes))
+
+deleteat!(ncubes2check,is_sorted_in_sorted(ncubes2check,mdbm.ncubes))
+
+_interpolate!(ncubes2check,mdbm, Val{1})
+
+    findin(ncubes2check,mdbm.ncubes)
+newneighbour = cubinds[indexin_sorted_iszero(mdbm.ncubes, ncubes2check)]
+findin([1,43,3,6,7],collect(2:14))
+findin(ncubes2check,mdbm.ncubes)
+searchsortedfirst()
+
+b = [1,2,5,7,9]
+a=[2,3,4]
+
+nc2chk=ncubes2check[3000]
+
+println("-----%%%%%%%%%%%%%%%%%-------")
+is_sorted_in_sorted([1,2,3,4,5,7,7,7,7,10,12,13,15],[1,2,5,7,7,7,7,9])
+
+
+println("-zzzzzzzzzzzzzzzzzzzzzzzzzzzzz----%%%%%%%%%%%%%%%%%-------")
+is_sorted_in_sorted([1,1,2,3,5,7,7,7,7,10,12,13,15],[1,2,5,7,7,7,7,9])
+
+
+Base.Sort.searchsorted(a,b[1])
+mdbm.ncubes[2]>=ncubes2check[2]
+filter(x->,ncubes2check)
+
+aaa=[any(nc->nc2chk==nc, mdbm.ncubes) for nc2chk in ncubes2check]
+any(aaa)
+mdbm=mymdb
+ű-., m
+interpolationorder=1
 
 allcorner(nc,[-mymdbm.T01[2:end],mymdbm.T01[2.^(0:2)+1]])
 
