@@ -1,4 +1,3 @@
-# MDBM__types.jl
 
 using StaticArrays #TODO:(sok helyen lehetne ez, főképp a memoizationban!!!)
 
@@ -9,10 +8,6 @@ struct MDBMcontainer{RTf,RTc,AT}
     callargs::AT
 end
 
-
-# function (fs::Vector{<:Function})(arg...,)
-#     [f(arg...,) for f in fs]
-# end
 #TODO memoization ofr multiple functions Vector{Function}
 struct MemF{RTf,RTc,AT} <:Function
     f::Function
@@ -26,37 +21,26 @@ end
 (memfun::MemF{RTf,RTc,AT})(::Type{RTf},::Type{RTc},args...,) where {RTf,RTc,AT} =( memfun.f(args...,)::RTf, memfun.c(args...,)::RTc)
 
 function (memfun::MemF{RTf,RTc,AT})(args...,) where {RTf,RTc,AT}
-    #println("As a normal function call")
-    # println(args)
     location=searchsortedfirst(memfun.fvalarg,args,lt=(x,y)->isless(x.callargs,y));
-    # println(location)
-    # println(length(memfun.fvalarg))
     if length(memfun.fvalarg)<location
-        # println("ujraszamolas a végére")
         x=memfun(RTf,RTc,args...,);
         push!(memfun.fvalarg,MDBMcontainer{RTf,RTc,AT}(x...,args))
         return x
     elseif  memfun.fvalarg[location].callargs!=args
-        # println("ujraszamolas közé illeszt")
-        # println(memfun.fvalarg[location].callargs)
-        # println(args)
         x=memfun(RTf,RTc,args...,);
         insert!(memfun.fvalarg, location, MDBMcontainer{RTf,RTc,AT}(x...,args))
         return x
     else
-        # println("mar megvolt")
         memfun.memoryacc[1]+=1;
         return (memfun.fvalarg[location].funval,memfun.fvalarg[location].cval);
     end
 end
 function (memfun::MemF{RTf,RTc,AT})(args::Tuple) where {RTf,RTc,AT}
-    #println("Function call with a Tuple---------")
     memfun(args...,)
 end
 
 
-
-# TODO: Ezt, hogy lehetne meghívni?
+# TODO: Ezt, hogy lehetne meghívni? a csoportos futtatáshoz???
 function (memfun::MemF{RTf,RTc,AT})(argsVect::Vector{Tuple}) where {RTf,RTc,AT}
     println("MEMO eval for many Tuples")
     [memfun(args) for args in argsVect]
@@ -117,54 +101,9 @@ function createAxesGetindexFunctionTuple(axes)
      eval(Meta.parse(fncreatorTuple(axes)))
 end
 
-
-
-
-
-
-# #
-# function (axes::Vector{Axis})(is...)
-#     getindex.(axes,is)
-#     # [mdbm.axes[i][iv] for (i,iv) in enumerate(is)]
-# end
-
-#
-# function (ax::Vector{Axis})(Coords::Vector{Integer})
-#     try
-#         # println(i)
-#         [ax(i).ticks[Coords[i]] for i in 1:length(ax)]
-#         # [ax(i).ticks[Coords[i,ki]] for i in 1:length(ax), ki in 1:size(Coords,2)]
-#
-#
-# # for i in 1:length(ax)
-# #     for ki in 1:size(Coords,2)
-# #         ax(i).ticks[Coords[i,ki]]
-# #     end
-# # end
-#         # map((x,y)->x.ticks[y], axes,i)
-#     catch
-#         println("Baj van!!")
-#         # println("the number of indexes ($(length(Coords))) in not compatible with the length of axes ($(length(ax)))")
-#         # println(Coords)
-#         # ((x)->println(length(x.ticks))).(ax)
-#     end
-# end
-
 function axdoubling!(ax::Axis)
         sort!(append!(ax.ticks, ax.ticks[1:end - 1] + diff(ax.ticks) / 2); alg=QuickSort)
 end
-
-# function (axes::Vector{Axis})(i...,)
-#     try
-#         # println(i)
-#         map((x,y)->x.ticks[y], axes,i)
-#     catch
-#         println("FUCK!")
-#         println("the number of indexes ($(length(i))) in not compatible with the length of axes ($(length(axes)))")
-#         println(i)
-#         ((x)->println(length(x.ticks))).(axes)
-#     end
-# end
 
 struct NCube{IT<:Integer,FT<:AbstractFloat,ValNdim}
     corner::MVector{ValNdim,IT} #"bottom-left" #Integer index of the axis
@@ -217,7 +156,6 @@ function T11pinvmaker(valk::Val{kdim}) where {kdim}
     SMatrix{kdim+1,twopow(valk)}(T11pinv)
 end
 
-
 struct MDBM_Problem{N}
     fc::Function
     axes::NTuple{N,Axis}
@@ -231,12 +169,8 @@ struct MDBM_Problem{N}
         if NdimCube!=Ndim
             error("axis size is not compatible to the nCube size") # internal check, it should never happend TODO: remove this line
         end
-        # T01=reshape([isodd(x÷(2^y)) for x in 0:(2^Ndim-1) for y in 0:(Ndim-1)],Ndim,(2^Ndim))
-        # T11=reshape([isodd(x÷(2^y)) for x in 0:(2^Ndim-1) for y in 0:Ndim],Ndim+1,(2^Ndim))*2.0 .-1.0
-        # T11pinv=T11/(2^Ndim)
         T01=T01maker(Val(Ndim))
         T11pinv=T11pinvmaker(Val(Ndim))
-        #new(f,c,axes,[NCube(IT.([x...]),ones(IT,length(x)),zeros(FT,length(axes))) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:])
         createAxesGetindexFunction((axes...,))
         createAxesGetindexFunctionTuple((axes...,))
         new{Ndim}(fc,(axes...,),
@@ -283,14 +217,8 @@ function MDBM_Problem(f::Function, a::Vector{<:AbstractVector};cons::Function=(x
 end
 
 function corner(mdbm::MDBM_Problem{N})::Vector{Vector{SVector}} where N
-    # [corner(nc,mdbm.T01) for nc in mdbm.ncubes]
     [corner(nc,mdbm.T01) for nc in mdbm.ncubes]
-    # [nc.corner .+ nc.size .* T for nc in mdbm.ncubes for T in mdbm.T01]
-    # c3=sort!(ccc)
-    # unique(ccc)
-    # cccunique=Set(ccc)
 end
-
 
 function issingchange(FunTupleVector::Vector)::Bool
 all(
@@ -322,7 +250,7 @@ function _interpolate!(ncubes::Vector{NCube},mdbm::MDBM_Problem,::Type{Val{0}})
 
     # ((nc)->nc.posinterp[:].=zero(typeof(nc.posinterp).parameters[1])).(mdbm.ncubes) #set the interpolated relative position to zero
     # ((nc)->nc.posinterp.*=0.0).(mdbm.ncubes) #set the interpolated relative position to zero
-    map(nc->nc.posinterp[:].=zeros(typeof(nc.posinterp[1]),Ndim), ncubes)
+    map(nc->nc.posinterp[:].=zeros(typeof(nc.posinterp[1]),Ndim), ncubes) #TODO: vagy egy forciklussal?
     return nothing
 end
 function _interpolate!(ncubes::Vector{NCube{IT,FT,N}} where IT where FT where N,mdbm::MDBM_Problem,::Type{Val{0}})
@@ -333,7 +261,7 @@ function _interpolate!(ncubes::Vector{NCube{IT,FT,N}} where IT where FT where N,
 
     # ((nc)->nc.posinterp[:].=zero(typeof(nc.posinterp).parameters[1])).(mdbm.ncubes) #set the interpolated relative position to zero
     # ((nc)->nc.posinterp.*=0.0).(mdbm.ncubes) #set the interpolated relative position to zero
-    map(nc->nc.posinterp[:].=zeros(typeof(nc.posinterp[1]),Ndim), ncubes)
+    map(nc->nc.posinterp[:].=zeros(typeof(nc.posinterp[1]),Ndim), ncubes) #TODO: vagy egy forciklussal?
     return nothing
 end
 
@@ -398,18 +326,6 @@ function _interpolate!(ncubes::Vector{NCube},mdbm::MDBM_Problem,::Type{Val{1}})
      #filter!((nc)->!any(isnan.(nc.posinterp)),mdbm.ncubes)
 
     return nothing
-end
-function axesextend!(mdbm::MDBM_Problem,axisnumber::Integer;prepend::AbstractArray=[],append::AbstractArray=[])
-    preplength=length(prepend);
-    if preplength>0
-        prepend!(mdbm.axes[axisnumber].ticks,prepend)
-        for nc in mdbm.ncubes
-            nc.corner[axisnumber]+=preplength;
-        end
-    end
-    if length(append)>0
-        append!(mdbm.axes[axisnumber].ticks,append)
-    end
 end
 
 function _interpolate!(ncubes::Vector{NCube{IT,FT,N}} where IT where FT where N,mdbm::MDBM_Problem,::Type{Val{1}})
@@ -478,6 +394,20 @@ function interpolate!(mdbm::MDBM_Problem;interpolationorder::Int=1)
     _interpolate!(mdbm.ncubes,mdbm, Val{interpolationorder})
 end
 
+
+function axesextend!(mdbm::MDBM_Problem,axisnumber::Integer;prepend::AbstractArray=[],append::AbstractArray=[])
+    preplength=length(prepend);
+    if preplength>0
+        prepend!(mdbm.axes[axisnumber].ticks,prepend)
+        for nc in mdbm.ncubes
+            nc.corner[axisnumber]+=preplength;
+        end
+    end
+    if length(append)>0
+        append!(mdbm.axes[axisnumber].ticks,append)
+    end
+end
+
 function getcornerval(mdbm::MDBM_Problem)#get it for all
     #getcornerval.(mdbm.ncubes,Ref(mdbm))
     map((mdbm.fc) ∘ (mdbm.axes),Base.Iterators.flatten(corner(mdbm)))
@@ -532,12 +462,6 @@ function getinterpolatedpoint(mdbm::MDBM_Problem)
         )
     for nc in mdbm.ncubes]#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
 for i in 1:length(mdbm.axes)]
-# [
-#     [
-#         (mdbm.axes[i].ticks[nc.corner[i]]*(typeof(mdbm.axes[i].ticks[1]).(1.0-(nc.posinterp[i]+1.0)/2.0))+
-#         mdbm.axes[i].ticks[nc.corner[i]+1]*(typeof(mdbm.axes[i].ticks[1]).((nc.posinterp[i]+1.0)/2.0)))
-#     for nc in mdbm.ncubes]::Vector{typeof(mdbm.axes[i].ticks[1])}
-# for i in eachindex(mdbm.axes)]
 end
 
 
@@ -558,7 +482,7 @@ else
     numberofiteration=0;
     while !isempty(newbracketinncubes) && (maxiteration==0 ? true : numberofiteration<maxiteration)
         numberofiteration+=1
-        #  creating the neightbouring ncubes------START-----------------
+        #  --------creating the neightbouring ncubes------START-----------------
         NumofNCubes=length(newbracketinncubes)
         for iT in 1:length(T101)
             append!(ncubes2check,deepcopy(newbracketinncubes))#TODO: ez így kell csinálni?
@@ -572,7 +496,8 @@ else
         # unique!(ncubes2check)#TODO: ez miért nem jó, pedig definiálva van az "isequal"
         #unique!(a->[a.corner,a.size], ncubes2check) #TODO: ez csak a Julia1.1 felett van!!!
         ncubes2check=unique(a->[a.corner,a.size], ncubes2check)
-        #  creating the neightbouring ncubes--------END--------------
+        #  --------creating the neightbouring ncubes--------END--------------
+
         #is_sorted_in_sorted(ncubes2check,mdbm.ncubes)
         deleteat!(ncubes2check,is_sorted_in_sorted(ncubes2check,mdbm.ncubes))
 
@@ -586,7 +511,7 @@ end
 end
 
 function index_sorted_in_sorted(a::AbstractVector, b::AbstractVector)::Array{Int64,1}
-    # is a[i] in b
+    # index of a[i] in b (0 if not present)
     # a and b must be sorted
     containingindex=zeros(Int64,length(a))
     startindex=1;
