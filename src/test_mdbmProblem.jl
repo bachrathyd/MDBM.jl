@@ -73,7 +73,7 @@ end
 # @time mdbm=MDBM_Problem(f,mdbmaxes,constraint=c,memoization=false)
 # @time mdbm=MDBM_Problem(f,mdbmaxes)
 # @time interpolate!(mdbm,interpolationorder=0)
-InterporderN=0
+InterporderN=1
 @time interpolate!(mymdbm,interpolationorder=InterporderN)
 
 
@@ -326,3 +326,22 @@ x,y=getinterpolatedpoint(mdbm)
 scatter(x,y)
 
 @code_warntype getinterpolatedpoint(mdbm)
+
+
+
+
+# SH test
+include("MDBM__types.jl")
+using Plots
+gr()
+
+using LinearAlgebra
+mymdbm=MDBM_Problem((x...)->norm([x...].+ 0.1,2.7)-2,[-2:2,-2:2,-2:2])
+
+interpolate!(mymdbm,interpolationorder=1)
+for k=1:2
+    @time refine!(mymdbm)
+    @time interpolate!(mymdbm,interpolationorder=1)
+    println("------")
+end
+@time checkneighbour!(mymdbm)

@@ -277,34 +277,10 @@ end
     MDBM_Problem(fun,axes,Vector{NCube{Int64,Float64,Ndim}}(undef, 0))
 end
 
-# function MDBM_Problem(f::Function, a::Vector{<:AbstractVector};constraint::Function=(x...,)->true, memoization::Bool=true)
-#     axes=[Axis(ax) for ax in a]
-#     argtypesofmyfunc=map(x->typeof(x).parameters[1], axes);#Argument Type
-#     AT=Tuple{argtypesofmyfunc...};
-#     type_f=Base.return_types(f,AT)
-#     if length(type_f)==0
-#         error("The input of the function is not compatible with the provided axes")
-#     else
-#         RTf=type_f[1];#Return Type of f
-#     end
-#
-#     type_con=Base.return_types(constraint,AT)
-#     if length(type_con)==0
-#         error("The input of the constraint function is not compatible with the provided axes")
-#     else
-#         RTc=type_con[1];#Return Type of the constraint function
-#     end
-#     if memoization
-#         fun=MemF(f,constraint,Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0));
-#         #cons=MemF(constraint,Array{MDBMcontainer{RTc,AT}}(undef, 0));
-#     else
-#         fun=(x)->(f(x...),constraint(x...));
-#         #cons=constraint;
-#     end
-#     Ndim=length(axes)
-#     MDBM_Problem{Ndim}(fun,axes)#,Vector{NCube{Int64,Float64,Val(Ndim)}}(undef, 0))
-# end
-
+function MDBM_Problem(f::Function, a::Vector{<:AbstractVector};cons::Function=(x...,)->true, memoi::Bool=true)
+    axes=[Axis(ax) for ax in a]
+    MDBM_Problem(f,axes,constraint=cons,memoization=memoi)#,Vector{NCube{Int64,Float64,Val(Ndim)}}(undef, 0))
+end
 
 function corner(mdbm::MDBM_Problem{N})::Vector{Vector{SVector}} where N
     # [corner(nc,mdbm.T01) for nc in mdbm.ncubes]
@@ -423,6 +399,19 @@ function _interpolate!(ncubes::Vector{NCube},mdbm::MDBM_Problem,::Type{Val{1}})
 
     return nothing
 end
+function axesextend!(mdbm::MDBM_Problem,axisnumber::Integer;prepend::AbstractArray=[],append::AbstractArray=[])
+    preplength=length(prepend);
+    if preplength>0
+        prepend!(mdbm.axes[axisnumber].ticks,prepend)
+        for nc in mdbm.ncubes
+            nc.corner[axisnumber]+=preplength;
+        end
+    end
+    if length(append)>0
+        append!(mdbm.axes[axisnumber].ticks,append)
+    end
+end
+
 function _interpolate!(ncubes::Vector{NCube{IT,FT,N}} where IT where FT where N,mdbm::MDBM_Problem,::Type{Val{1}})
 #function _interpolate!(ncubes::Vector{NCube{IT,FT,N}} where IT where FT where N,mdbm,::Type{Val{1}})
     Ndim=length(mdbm.axes)
@@ -494,10 +483,10 @@ function getcornerval(mdbm::MDBM_Problem)#get it for all
     map((mdbm.fc) ∘ (mdbm.axes),Base.Iterators.flatten(corner(mdbm)))
 end
 
-function getcornerval(ncubes::NCube{IT,FT,N} where IT where FT where N,mdbm::MDBM_Problem)
+function getcornerval(ncube::NCube{IT,FT,N} where IT where FT where N,mdbm::MDBM_Problem)
     #PostionsVectors=(mdbm.axes.(corner(nc,mdbm.T01)))
     # (mdbm.fc).( (mdbm.axes).(corner(nc,mdbm.T01)) )
-    map((mdbm.fc) ∘ (mdbm.axes),corner(ncubes,mdbm.T01))
+    map((mdbm.fc) ∘ (mdbm.axes),corner(ncube,mdbm.T01))
 end
 
 function doubling!(mdbm::MDBM_Problem,directions::Vector{T}) where T<:Integer
@@ -559,8 +548,8 @@ if isempty(mdbm.ncubes)
     println("There is no bracketing n-cubes to check!")
 else
 
-    neighbourind=0:2^length(mdbm.axes)#cornering neightbour also
-    neighbourind=2 .^(0:(length(mdbm.axes)-1)) .+ 1#neighbour only in the side
+    #neighbourind=1:2^length(mdbm.axes)#cornering neightbours also
+    neighbourind=2 .^(0:(length(mdbm.axes)-1)) .+ 1#neighbour only on the side
     T101=[-mymdbm.T01[neighbourind]...,mymdbm.T01[neighbourind]...]
 
 
@@ -578,7 +567,7 @@ else
                     # ncubes2check[nci].corner[:]=ncubes2check[nci].corner+T.*ncubes2check[nci].size
             end
         end
-
+        filter!(nc->!(any(nc.corner .< 1 ) || any((nc.corner+nc.size) .> [length.(mdbm.axes)...])),ncubes2check)#remove the overhanging ncubes
         sort!(ncubes2check; alg=QuickSort)
         # unique!(ncubes2check)#TODO: ez miért nem jó, pedig definiálva van az "isequal"
         #unique!(a->[a.corner,a.size], ncubes2check) #TODO: ez csak a Julia1.1 felett van!!!
@@ -587,67 +576,14 @@ else
         #is_sorted_in_sorted(ncubes2check,mdbm.ncubes)
         deleteat!(ncubes2check,is_sorted_in_sorted(ncubes2check,mdbm.ncubes))
 
-
-
         _interpolate!(ncubes2check,mdbm, Val{interpolationorder})#remove the non-bracketing, only proper new bracketing cubes remained
 
-        newbracketinncubes=deepcopy(ncubes2check)#TODO: kell ez?
-        append!(mdbm.ncubes,deepcopy(ncubes2check))#TODO: kell ez?
+        newbracketinncubes=deepcopy(ncubes2check)#TODO: kell a deepcopy?
+        append!(mdbm.ncubes,deepcopy(ncubes2check))#TODO: kell a deepcopy?
         sort!(mdbm.ncubes; alg=QuickSort)
     end
 end
 end
-
-
-#------------------------
-
-# function indexin_sorted(a::Array{Ta,1}, b::Array{Tb,1})::Array{Int64,1} where Ta where Tb
-#         # b must contain all the lements of a
-#         # a and b must be sorted
-#     if isempty(a)
-#         return Array{Int64}(undef,0)
-#     elseif length(b) == 1 ##much faster!
-#         return Int64.(a .== b)#*Int64(1)  #/TODO: ez így nem jó, nem használja ki, hogy sorted!!!
-#     else
-#         out = Array{Int64}(undef, size(a));#zeros(T, size(a))
-#         leng::Int64 = length(b);
-#
-#         q::Int64 = 1;
-#         q1::Int64 = 1;
-#         q2::Int64 = length(b);
-#         for k = 1:length(a)
-#
-#             if (q2 - q1) == 1
-#                 q = (b[q1] == a[k]) ? q1 : q2
-#             else
-#                 while (b[q] != a[k]) & (q2 > q1 + 1)
-#                     if b[q] > a[k]
-#                         q2 = q
-#                         q =  (q + q1+1) ÷ 2
-#                     else
-#                         q1 = q
-#                         q = (q + q2) ÷ 2
-#                     end
-#             #print([q1;q;q2])
-#             #print([b[q]])
-#             #println([a[k]])
-#                 end
-#             end
-#             out[k] = b[q] == a[k] ? q : 0
-#             q = max(out[k], q1)
-#             q1 = q
-#             q2 = length(b)
-#           #print("-----")
-#           #print(out[1:k])
-#           #println("----")
-#             if q1 > length(b)#all the element is larger than the last one
-#                 break
-#             end
-#         end
-#         return out
-#     end
-# end
-
 
 function index_sorted_in_sorted(a::AbstractVector, b::AbstractVector)::Array{Int64,1}
     # is a[i] in b
