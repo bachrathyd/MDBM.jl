@@ -413,10 +413,10 @@ function getcornerval(mdbm::MDBM_Problem)#get it for all
     map((mdbm.fc) ∘ (mdbm.axes),Base.Iterators.flatten(corner(mdbm)))
 end
 
-function getcornerval(ncube::NCube{IT,FT,N} where IT where FT where N,mdbm::MDBM_Problem)
+function getcornerval(ncubes::NCube{IT,FT,N} where IT where FT where N,mdbm::MDBM_Problem)
     #PostionsVectors=(mdbm.axes.(corner(nc,mdbm.T01)))
     # (mdbm.fc).( (mdbm.axes).(corner(nc,mdbm.T01)) )
-    map((mdbm.fc) ∘ (mdbm.axes),corner(ncube,mdbm.T01))
+    map((mdbm.fc) ∘ (mdbm.axes),corner(ncubes,mdbm.T01))
 end
 
 function doubling!(mdbm::MDBM_Problem,directions::Vector{T}) where T<:Integer
@@ -464,6 +464,104 @@ function getinterpolatedpoint(mdbm::MDBM_Problem)
 for i in 1:length(mdbm.axes)]
 end
 
+# function generateneighbours(ncubes::Vector{NCube},mdbm::MDBM_Problem{N}) where N
+function generateneighbours(ncubes::Vector{NCube{IT,FT,Ndim}} where IT where FT where Ndim,mdbm::MDBM_Problem{N}) where N
+    #-------all faceing/cornering neightbours----------------
+    # #neighbourind=1:2^length(mdbm.axes) #cornering neightbours also - unnecessary
+    # neighbourind=2 .^(0:(length(mdbm.axes)-1)) .+ 1 #neighbour only on the side
+    # T101=[-mdbm.T01[neighbourind]...,mdbm.T01[neighbourind]...]
+    #
+    # nc_neighbour = Array{typeof(mdbm.ncubes[1])}(undef,0)
+    # NumofNCubes=length(ncubes)
+    # for iT in 1:length(T101)
+    #     append!(nc_neighbour,deepcopy(ncubes))#TODO: ez így kell csinálni?
+    #     for nci in ((1+NumofNCubes*(iT-1)):(NumofNCubes+NumofNCubes*(iT-1)))
+    #         nc_neighbour[nci].corner[:]=nc_neighbour[nci].corner+T101[iT].*nc_neighbour[nci].size
+    #     end
+    # end
+    #-------all faceing/cornering neightbours----------------
+
+
+    #-------direcational neightbours----------------
+    nc_neighbour = Array{typeof(mdbm.ncubes[1])}(undef,0)
+    Ndim=length(mdbm.axes)
+    Nface=2^Ndim
+    indpos=[[mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:Ndim]
+    indneg=[[!mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:Ndim]
+
+    for nc in ncubes
+        fcvals=getcornerval(nc,mdbm)
+        for dir in 1:Ndim
+            # indpos=[mdbm.T01[i][dir] for i in 1:Nface]
+            # indneg=[!mdbm.T01[i][dir] for i in 1:Nface]
+            if issingchange(fcvals[indpos[dir]])
+                push!(nc_neighbour,deepcopy(nc))
+                nc_neighbour[end].corner[dir]+=nc_neighbour[end].size[dir]
+            end
+            if issingchange(fcvals[indneg[dir]])
+                push!(nc_neighbour,deepcopy(nc))
+                nc_neighbour[end].corner[dir]-=nc_neighbour[end].size[dir]
+            end
+        end
+    end
+    #-------direcational neightbours----------------
+    filter!(nc->!(any(nc.corner .< 1 ) || any((nc.corner+nc.size) .> [length.(mdbm.axes)...])),nc_neighbour)#remove the overhanging ncubes
+    sort!(nc_neighbour; alg=QuickSort)
+    # unique!(nc_neighbour)#TODO: ez miért nem jó, pedig definiálva van az "isequal"
+    #unique!(a->[a.corner,a.size], nc_neighbour) #TODO: ez csak a Julia1.1 felett van!!!
+    nc_neighbour=unique(a->[a.corner,a.size], nc_neighbour)
+    return nc_neighbour
+end
+
+function generateneighbours(ncubes::Vector{NCube},mdbm::MDBM_Problem{N}) where N
+# function generateneighbours(ncubes::Vector{NCube{IT,FT,Ndim}} where IT where FT where Ndim,mdbm::MDBM_Problem{N}) where N
+    #-------all faceing/cornering neightbours----------------
+    # #neighbourind=1:2^length(mdbm.axes) #cornering neightbours also - unnecessary
+    # neighbourind=2 .^(0:(length(mdbm.axes)-1)) .+ 1 #neighbour only on the side
+    # T101=[-mdbm.T01[neighbourind]...,mdbm.T01[neighbourind]...]
+    #
+    # nc_neighbour = Array{typeof(mdbm.ncubes[1])}(undef,0)
+    # NumofNCubes=length(ncubes)
+    # for iT in 1:length(T101)
+    #     append!(nc_neighbour,deepcopy(ncubes))#TODO: ez így kell csinálni?
+    #     for nci in ((1+NumofNCubes*(iT-1)):(NumofNCubes+NumofNCubes*(iT-1)))
+    #         nc_neighbour[nci].corner[:]=nc_neighbour[nci].corner+T101[iT].*nc_neighbour[nci].size
+    #     end
+    # end
+    #-------all faceing/cornering neightbours----------------
+
+
+    #-------direcational neightbours----------------
+    nc_neighbour = Array{typeof(mdbm.ncubes[1])}(undef,0)
+    Ndim=length(mdbm.axes)
+    Nface=2^Ndim
+    indpos=[[mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:Ndim]
+    indneg=[[!mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:Ndim]
+
+    for nc in ncubes
+        fcvals=getcornerval(nc,mdbm)
+        for dir in 1:Ndim
+            # indpos=[mdbm.T01[i][dir] for i in 1:Nface]
+            # indneg=[!mdbm.T01[i][dir] for i in 1:Nface]
+            if issingchange(fcvals[indpos[dir]])
+                push!(nc_neighbour,deepcopy(nc))
+                nc_neighbour[end].corner[dir]+=nc_neighbour[end].size[dir]
+            end
+            if issingchange(fcvals[indneg[dir]])
+                push!(nc_neighbour,deepcopy(nc))
+                nc_neighbour[end].corner[dir]-=nc_neighbour[end].size[dir]
+            end
+        end
+    end
+    #-------direcational neightbours----------------
+
+    filter!(nc->!(any(nc.corner .< 1 ) || any((nc.corner+nc.size) .> [length.(mdbm.axes)...])),nc_neighbour)#remove the overhanging ncubes
+    sort!(nc_neighbour; alg=QuickSort)
+    # unique!(nc_neighbour)#TODO: ez miért nem jó, pedig definiálva van az "isequal"
+    #unique!(a->[a.corner,a.size], nc_neighbour) #TODO: ez csak a Julia1.1 felett van!!!
+    nc_neighbour=unique(a->[a.corner,a.size], nc_neighbour)
+    return nc_neighbour
+end
 
 function checkneighbour!(mdbm::MDBM_Problem;interpolationorder::Int=0,maxiteration::Int=0)#only for unite size cubes
 #mTODO: mivan azzal a kockával, aki szomszédként leellenőriztünk, de nem tartalmazott,... majd a követés során újra mellé kerülünk -> így az kétszer lesz ellőnőrizve (ez a Matlabban is rosssz)
@@ -471,35 +569,13 @@ function checkneighbour!(mdbm::MDBM_Problem;interpolationorder::Int=0,maxiterati
 if isempty(mdbm.ncubes)
     println("There is no bracketing n-cubes to check!")
 else
-
-    #neighbourind=1:2^length(mdbm.axes)#cornering neightbours also
-    neighbourind=2 .^(0:(length(mdbm.axes)-1)) .+ 1#neighbour only on the side
-    T101=[-mymdbm.T01[neighbourind]...,mymdbm.T01[neighbourind]...]
-
-
-    newbracketinncubes =mdbm.ncubes
-    ncubes2check = Array{typeof(mdbm.ncubes[1])}(undef,0)
+    newbracketinncubes=mdbm.ncubes
     numberofiteration=0;
     while !isempty(newbracketinncubes) && (maxiteration==0 ? true : numberofiteration<maxiteration)
         numberofiteration+=1
-        #  --------creating the neightbouring ncubes------START-----------------
-        NumofNCubes=length(newbracketinncubes)
-        for iT in 1:length(T101)
-            append!(ncubes2check,deepcopy(newbracketinncubes))#TODO: ez így kell csinálni?
-            for nci in ((1+NumofNCubes*(iT-1)):(NumofNCubes+NumofNCubes*(iT-1)))
-                ncubes2check[nci].corner[:]=ncubes2check[nci].corner+T101[iT].*ncubes2check[nci].size
-                    # ncubes2check[nci].corner[:]=ncubes2check[nci].corner+T.*ncubes2check[nci].size
-            end
-        end
-        filter!(nc->!(any(nc.corner .< 1 ) || any((nc.corner+nc.size) .> [length.(mdbm.axes)...])),ncubes2check)#remove the overhanging ncubes
-        sort!(ncubes2check; alg=QuickSort)
-        # unique!(ncubes2check)#TODO: ez miért nem jó, pedig definiálva van az "isequal"
-        #unique!(a->[a.corner,a.size], ncubes2check) #TODO: ez csak a Julia1.1 felett van!!!
-        ncubes2check=unique(a->[a.corner,a.size], ncubes2check)
-        #  --------creating the neightbouring ncubes--------END--------------
+        ncubes2check=generateneighbours(newbracketinncubes,mdbm)
 
-        #is_sorted_in_sorted(ncubes2check,mdbm.ncubes)
-        deleteat!(ncubes2check,is_sorted_in_sorted(ncubes2check,mdbm.ncubes))
+        deleteat!(ncubes2check,is_sorted_in_sorted(ncubes2check,mdbm.ncubes))#delete the ones which is already presented
 
         _interpolate!(ncubes2check,mdbm, Val{interpolationorder})#remove the non-bracketing, only proper new bracketing cubes remained
 
