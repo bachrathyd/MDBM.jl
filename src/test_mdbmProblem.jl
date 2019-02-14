@@ -78,6 +78,7 @@ InterporderN=1
 
 
 @time for k=1:5
+checkneighbour!(mymdbm)
 refine!(mymdbm)
 interpolate!(mymdbm,interpolationorder=InterporderN)
 println("-...==========......")
