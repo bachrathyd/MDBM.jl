@@ -308,10 +308,13 @@ function _interpolate!(ncubes::Vector{NCube},mdbm::MDBM_Problem,::Type{Val{1}})
                     push!(ns,solloc[1:end-1])
                 end
             end
-
-            nsMAT=hcat(ns...)
-            #nc.posinterp[:] .= nsMAT * ((transpose(nsMAT) * nsMAT) \ As);
-            nc.posinterp[:] .= nsMAT * (inv(transpose(nsMAT) * nsMAT) * As);
+            if length(ns)==0
+                nc.posinterp[:] .=0.0
+            else
+                nsMAT=hcat(ns...)
+                #nc.posinterp[:] .= nsMAT * ((transpose(nsMAT) * nsMAT) \ As);
+                nc.posinterp[:] .= nsMAT * (inv(transpose(nsMAT) * nsMAT) * As);
+            end
             #for c---------------------
         else
             nc.posinterp[:] .=1000.0;#put it outside the cube!
