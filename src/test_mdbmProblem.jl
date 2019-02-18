@@ -96,3 +96,46 @@ println("datapoints: ", length(mymdbm.ncubes)*9+length(mymdbm.fc.fvalarg)*5)
 #--------------- szemét--------------------------------
 nc=mymdbm.ncubes[1]
 @code_warntype (corner(nc,mymdbm.T01))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# SH test
+include("MDBM__types.jl")
+
+using LinearAlgebra
+# mymdbm=MDBM_Problem((x...)->norm([x...] .- 0.2,2.7)-1.9,[-2:2,-2:2])
+
+ax1=Axis(-5:3.0,"a")
+ax2=Axis(-5:3.0,"b")
+
+mymdbm=MDBM_Problem((x...)->[x[1],x[2]],[ax1,ax2],constraint=(x...) -> -(norm([x...].+ 1.5,1.7)+sin(x[1]*5)-2.0))
+# mymdbm=MDBM_Problem((x...) -> -maximum([0.0,-(norm([x...].+ 1.5,1.7)+sin(x[1]*5)-2.0)]),[ax1,ax2])
+interpolate!(mymdbm,interpolationorder=1)
+for k=1:4
+    refine!(mymdbm)
+    interpolate!(mymdbm,interpolationorder=1)
+end
+checkneighbour!(mymdbm)
+interpolate!(mymdbm,interpolationorder=1)
+println("+++++++++++++")
+
+#solution points
+a_sol,b_sol=getinterpolatedpoint(mymdbm)
+
+F_sol=map((x,y)->x*x-y*y,a_sol,b_sol)
+# scatter(a_sol,b_sol,F_sol,size = (500, 500))
+
+
+fig = figure(5)
+plot3D(a_sol,b_sol,F_sol,linestyle="",  marker=".",markersize=4);
