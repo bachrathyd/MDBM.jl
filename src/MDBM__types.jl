@@ -324,8 +324,10 @@ function _interpolate!(ncubes::Vector{NCube},mdbm::MDBM_Problem,::Type{Val{1}})
     #TODO: what if it falls outside of the n-cube
     #TODO: it should be removed ->what shall I do with the bracketing cubes?
      #filter!((nc)->norm(nc.posinterp,20.0)>2.0 ,mdbm.ncubes) LinearAlgebre is needed
-     #filter!((nc)->sum(nc.posinterp.^20.0)<(2.0 ^20.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
-     filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.2 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
+     filter!((nc)->sum(nc.posinterp.^10.0)<(2.0 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
+     # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.05 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
+
+     # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.25*Ndim ^(1.0/10.0)),mdbm.ncubes)#1e6~=(2.0 ^20.0)
      #filter!((nc)->!any(isnan.(nc.posinterp)),mdbm.ncubes)
 
     return nothing
@@ -464,6 +466,14 @@ function getinterpolatedpoint(mdbm::MDBM_Problem)
         mdbm.axes[i].ticks[nc.corner[i]+1]*((nc.posinterp[i]+1.0)/2.0))
         )
     for nc in mdbm.ncubes]#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
+for i in 1:length(mdbm.axes)]
+end
+function getinterpolatedpoint(nc::NCube{IT,FT,Ndim} where IT where FT where Ndim,mdbm::MDBM_Problem)
+[
+        (typeof(mdbm.axes[i].ticks).parameters[1])(
+        (mdbm.axes[i].ticks[nc.corner[i]]*(1.0-(nc.posinterp[i]+1.0)/2.0)+
+        mdbm.axes[i].ticks[nc.corner[i]+1]*((nc.posinterp[i]+1.0)/2.0))
+        )#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
 for i in 1:length(mdbm.axes)]
 end
 
@@ -619,4 +629,63 @@ function is_sorted_in_sorted(a::AbstractVector, b::AbstractVector)::Array{Bool,1
         end
     end
     return iscontained
+end
+
+
+
+
+function DTconnect(mdbm::MDBM_Problem{N}) where N
+    #---------- line connection (no corener neighbour is needed) --------------
+    DT1=Array{Tuple{Int64,Int64}}(undef,0)
+    for inc in 1:length(mdbm.ncubes)
+        ncneigh=generateneighbours([mdbm.ncubes[inc]],mdbm)
+        indinresults=index_sorted_in_sorted(ncneigh,mdbm.ncubes)#delete the ones which is already presented
+        append!(DT1,[(inc,x) for x in indinresults if x!=0])
+        # _interpolate!(ncubes2check,mdbm, Val{interpolationorder})#remove the non-bracketing, only proper new bracketing cubes remained
+        #
+        # newbracketinncubes=deepcopy(ncubes2check)#TODO: kell a deepcopy?
+        # append!(mdbm.ncubes,deepcopy(ncubes2check))#TODO: kell a deepcopy?
+    end
+    filter!(d->(d[2]>d[1]),DT1)#TODO: eleve csak ez egyik irányban levő szomszédokat kellene keresni!!!
+    sort!(DT1; alg=QuickSort)
+    unique!(DT1)
+    return DT1
+end
+
+
+function triangulation(DT1::Array{Tuple{Int64,Int64}})::Array{Tuple{Int64,Int64,Int64}}
+
+    #DT=sort!()[DT1;[(d[2],d[1]) for d in DT1]]);
+    DT=sort!([DT1;[d[[2,1]] for d in DT1]])#both direction of line connection is necessay!
+
+    #L=[filter(d->d[1]==i,DT) for i in 1:length(mymdbm.ncubes)]
+    L=[
+    [dd[2] for dd in filter(d->d[1]==i,DT)] for i in 1:length(mymdbm.ncubes)]
+
+    DT4=Array{Tuple{Int64,Int64,Int64,Int64}}(undef,0)#quadratic patch
+    # %DT2=zeros(40*size(L,1)*6^(length(mdbm_sol.ax)),4);
+    # DT2=zeros(40*size(L,1)*6^(mdbm_sol.opt.Ndim-mdbm_sol.opt.Ncodim),4);
+    for i in 1:size(L,1)
+        for j in L[i]#filter((L{i}>i) for i in )
+            if i>j#i must be the larges value to remove the repetition of the some surface segment
+
+                for k in L[j]#(L{j}>i) it seems to be slower
+
+                    if i>k# there is no backstep, and i must be the largest   (Equivalent: %((k~=i) && (i>k))%back step is not allowed
+                        for m in L[k]
+                            if ((m!=j) && (j>m)) #&& (i>m) #back step is not allowed, and i must be the largest
+
+                                if any(i.==L[m])
+                                    push!(DT4,(i,j,k,m))
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return [[dt[[1,2,3]] for dt in DT4];[dt[[3,1,4]] for dt in DT4]]#DT2 triangular patch from the quadratic patch
+
 end

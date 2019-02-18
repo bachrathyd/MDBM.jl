@@ -13,7 +13,7 @@ ax(3).val=-3:3
 
 % number of iteration
 Niteration=5;%take care, the large values can easily lead to memory problem
-mdbmoption=mdbmset('isconstrained',1,'interporder',1,'connections',0,'checkneighbour',0)
+mdbmoption=mdbmset('isconstrained',1,'interporder',1,'connections',1,'checkneighbour',0)
 %% function for which the roots are detected
 [c1] = clock
 tic
