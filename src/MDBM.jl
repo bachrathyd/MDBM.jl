@@ -10,7 +10,6 @@ export MDBM_Problem, Axis,
  axesextend!, getinterpolatedsolution, getevaluatedpoints, getevaluatedfunctionvalues, getevaluatedconstraintvalues,
  connect, triangulation
 
-
 include("MDBM_types.jl")
 include("MDBM_functions.jl")
 

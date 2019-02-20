@@ -1,4 +1,9 @@
-# include("MDBM__types.jl")
+# include("MDBM.jl")
+# using Reexport
+# @reexport using .MDBM
+#
+# using PyPlot;
+# pygui(true);
 # # ~~~~~~~~~~~~~~~~~~~~~~~
 # ax1=Axis(1:20)
 # ax2=Axis(1:20)
@@ -20,8 +25,12 @@
 #
 # # ~~~~~~~~~~~~~~~~~~~~~~~
 
+include("MDBM.jl")
+using Reexport
+@reexport using .MDBM
 
-include("MDBM__types.jl")
+using PyPlot;
+pygui(true);
 
 println("-................")
 #TDOO: WTF
@@ -83,8 +92,7 @@ interpolate!(mymdbm,interpolationorder=InterporderN)
 println("-...==========......")
 end
 
-using Plots
-gr()
+
 
 x,y,z=getinterpolatedpoint(mymdbm)
 println("pontins: ", length(mymdbm.ncubes))
@@ -99,43 +107,41 @@ nc=mymdbm.ncubes[1]
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-# SH test
-include("MDBM__types.jl")
-
+#############--------------------------
+using StaticArrays
 using LinearAlgebra
-# mymdbm=MDBM_Problem((x...)->norm([x...] .- 0.2,2.7)-1.9,[-2:2,-2:2])
+include("MDBM_types.jl")
+include("MDBM_functions.jl")
 
-ax1=Axis(-5:3.0,"a")
-ax2=Axis(-5:3.0,"b")
+using PyPlot;
+pygui(true);
 
-mymdbm=MDBM_Problem((x...)->[x[1],x[2]],[ax1,ax2],constraint=(x...) -> -(norm([x...].+ 1.5,1.7)+sin(x[1]*5)-2.0))
-# mymdbm=MDBM_Problem((x...) -> -maximum([0.0,-(norm([x...].+ 1.5,1.7)+sin(x[1]*5)-2.0)]),[ax1,ax2])
-interpolate!(mymdbm,interpolationorder=1)
-for k=1:4
-    refine!(mymdbm)
-    interpolate!(mymdbm,interpolationorder=1)
+function foo(a,b)
+    a^2.0+b^2.0-2.0^2.0
 end
-checkneighbour!(mymdbm)
-interpolate!(mymdbm,interpolationorder=1)
-println("+++++++++++++")
+function c(a,b)
+    a-b
+end
+
+ax1=Axis([-5,-2.5,0,2.5,5],"a")
+ax2=Axis(-5:2:5.0,"b")
+
+mymdbm=MDBM_Problem(foo,[ax1,ax2],constraint=c)
+iteration=10
+@time solve!(mymdbm,iteration)
+
+
+#evaluated points
+a_eval,b_eval=getevaluatedpoints(mymdbm)
 
 #solution points
-a_sol,b_sol=getinterpolatedpoint(mymdbm)
+a_sol,b_sol=getinterpolatedsolution(mymdbm)
 
-F_sol=map((x,y)->x*x-y*y,a_sol,b_sol)
-# scatter(a_sol,b_sol,F_sol,size = (500, 500))
+fig = figure(100);clf()
+scatter(a_eval,b_eval,s=0.5)
+scatter(a_sol,b_sol,s=1);
 
 
-fig = figure(5)
-plot3D(a_sol,b_sol,F_sol,linestyle="",  marker=".",markersize=4);
+@time myDT1=connect(mymdbm);
+
+@time triangulation(myDT1)
