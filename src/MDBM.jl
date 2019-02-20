@@ -6,7 +6,7 @@ using Reexport
 @reexport using LinearAlgebra
 
 export MDBM_Problem, Axis,
- solve!, interpolate!, refine!, checkneighbour!,
+ solve!, interpolate!, refine!, checkneighbour!, plotmdbm,
  axesextend!, getinterpolatedsolution, getevaluatedpoints, getevaluatedfunctionvalues, getevaluatedconstraintvalues,
  connect, triangulation
 

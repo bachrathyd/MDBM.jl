@@ -59,7 +59,7 @@ Computation of a circle defined the implicit equtaion `foo` considering a constr
 function foo(x,y)
     x^2.0+y^2.0-2.0^2.0
 end
-function c(x,y)
+function c(x,y) #only the c>0 domain is analysed
     x-y
 end
 
@@ -119,11 +119,10 @@ solve!(Sphere2mdbm,4)
 a_sol,b_sol,c_sol=getinterpolatedsolution(Sphere2mdbm)
 plot3D(a_sol,b_sol,c_sol,linestyle="", marker=".", markersize=1);
 
+#Intersection
 fS12=(x...)->[fS1(x...),fS2(x...)]
 Intersectmdbm=MDBM_Problem(fS12,axes)
 solve!(Intersectmdbm,6)
-
-#Intersection
 a_sol,b_sol,c_sol=getinterpolatedsolution(Intersectmdbm)
 plot3D(a_sol,b_sol,c_sol,color="k",linestyle="", marker=".", markersize=2);
 
@@ -135,7 +134,6 @@ plot3D(a_sol,b_sol,c_sol,color="k",linestyle="", marker=".", markersize=2);
 Example for a non-smooth problem (Mandelbrot set)
 
 ```julia
-fig = figure(4);clf()
 function mandelbrot(x,y)    
     c=x+y*1im
     z=Complex(0)
@@ -151,7 +149,8 @@ end
 Mandelbrotmdbm=MDBM_Problem(mandelbrot,[-5:2,-2:2])
 solve!(Mandelbrotmdbm,9)
 a_sol,b_sol=getinterpolatedsolution(Mandelbrotmdbm)
-plot(a_sol,b_sol,linestyle="", marker=".", markersize=1);
+fig = figure(3);clf()
+plot(a_sol,b_sol,linestyle="", marker=".", markersize=1)
 ```
 <img src="assets/Mandelbrot.png"
      alt="solution "/>

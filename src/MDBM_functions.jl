@@ -119,7 +119,7 @@ function _interpolate!(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,Nf,Nc
                     solloc=mdbm.T11pinv*[FunTupleVector[kcubecorner][2][kf] for kcubecorner=1:length(FunTupleVector)]
                     activeCostraint+=1;
                     As[Nf+activeCostraint]=solloc[end];
-                    ns[Nf+activeCostraint,kf].=solloc[1:end-1];
+                    ns[:,Nf+activeCostraint].=solloc[1:end-1];
                 end
             end
 
@@ -137,8 +137,8 @@ function _interpolate!(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,Nf,Nc
     #TODO: what if it falls outside of the n-cube, it should be removed ->what shall I do with the bracketing cubes?
     # Let the user define it
      # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.5 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
-     normp=10.0
-     ncubetolerance=0.5
+     normp=5.0
+     ncubetolerance=0.7
      filter!((nc)->norm(nc.posinterp,normp)<1.0+ncubetolerance,mdbm.ncubes)
      #filter!((nc)->!any(isnan.(nc.posinterp)),mdbm.ncubes)
 
