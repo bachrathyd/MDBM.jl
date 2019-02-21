@@ -1,9 +1,14 @@
-__precompile__()
+# __precompile__()
 
 module MDBM
+using Reexport
+@reexport using StaticArrays
+@reexport using LinearAlgebra
 
-export mdbm_problem, mdbm_object, refine!, checkncube!, checkneighbour!, interpolate!, DTconnect!
-#export find_roots, refine_solution!
+export MDBM_Problem, Axis,
+ solve!, interpolate!, refine!, checkneighbour!, plotmdbm,
+ axesextend!, getinterpolatedsolution, getevaluatedpoints, getevaluatedfunctionvalues, getevaluatedconstraintvalues,
+ connect, triangulation
 
 include("MDBM_types.jl")
 include("MDBM_functions.jl")
