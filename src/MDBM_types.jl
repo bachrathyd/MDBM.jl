@@ -36,7 +36,11 @@ function (memfun::MemF{RTf,RTc,AT})(args::Tuple) where {RTf,RTc,AT}
     memfun(args...,)
 end
 
+"""
+    Axis{T}
 
+Represent the parameter space in a discretized grid (vector) in `ticks`.
+"""
 struct Axis{T} <: AbstractVector{T}
     ticks::Vector{T}
     name
@@ -111,10 +115,36 @@ import Base.==
 ==(a::NCube{IT,FT,N},b::NCube{IT,FT,N}) where IT where FT where N = all([a.corner==b.corner,a.size==b.size])
 
 
+"""
+    struct MDBM_Problem{N,Nf,Nc}
 
+Store the main data for the Multi-Dimensional Bisection Method.
+
+# Examples
+```julia
+include("MDBM.jl")
+using Reexport
+@reexport using .MDBM
+
+function foo(x,y)
+    x^2.0+y^2.0-2.0^2.0
+end
+function c(x,y) #only the c>0 domain is analysed
+    x-y
+end
+
+ax1=Axis([-5,-2.5,0,2.5,5],"x") # initial grid in x direction
+ax2=Axis(-5:2:5.0,"y") # initial grid in y direction
+
+mymdbm=MDBM_Problem(foo,[ax1,ax2],constraint=c)
+```
+"""
 struct MDBM_Problem{N,Nf,Nc}
+    "(memoized) function and constraint in a Tuple"
     fc::Function
+    "The vector of discretized parameters space"
     axes::NTuple{N,Axis}
+    "the bracketing n-cubes (which contains a solution)"
     ncubes::Vector{NCube{IT,FT,N}} where IT<:Integer where FT<:AbstractFloat
     T01::AbstractVector{<:AbstractVector}#SArray#
     T11pinv::SMatrix

@@ -1,10 +1,22 @@
-
-
 function axdoubling!(ax::Axis)
         sort!(append!(ax.ticks, ax.ticks[1:end - 1] + diff(ax.ticks) / 2); alg=QuickSort)
 end
 
-function axesextend!(mdbm::MDBM_Problem{N,Nf,Nc},axisnumber::Integer;prepend::AbstractArray=[],append::AbstractArray=[]) where N where Nf where Nc
+
+"""
+    axesextend!(mdbm::MDBM_Problem{N,Nf,Nc}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[])
+
+Extend parameter space of the selected Axis by prepend and append the grid.
+
+Note, that the resolution and the monotonically is not checked.
+
+# Examples
+extending the second parameter of the mdbm problem:
+```jldoctest
+julia> axesextend!(mymdbm,2,prepend=-6.2:0.05:-2.2,append=2.2:0.2:3);
+```
+"""
+function axesextend!(mdbm::MDBM_Problem{N,Nf,Nc}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[]) where N where Nf where Nc
     preplength=length(prepend);
     if preplength>0
         prepend!(mdbm.axes[axisnumber].ticks,prepend)
@@ -17,12 +29,12 @@ function axesextend!(mdbm::MDBM_Problem{N,Nf,Nc},axisnumber::Integer;prepend::Ab
     end
 end
 
-function corner(nc::NCube{IT,FT,N},T01)::Vector{MVector} where IT where FT where N
+function corner(nc::NCube{IT,FT,N}, T01)::Vector{MVector} where IT where FT where N
     [nc.corner .+ nc.size .* T for T in T01]
 end
 
 
-function corner(ncubes::Vector{NCube{IT,FT,N}},T01)::Vector{Vector{MVector}} where IT where FT where N
+function corner(ncubes::Vector{NCube{IT,FT,N}}, T01)::Vector{Vector{MVector}} where IT where FT where N
     [corner(nc,T01) for nc in ncubes]
     # [nc.corner .+ nc.size .* T for nc in ncubes for T in T01]
 end
@@ -38,7 +50,7 @@ function getcornerval(mdbm::MDBM_Problem{N,Nf,Nc}) where N where Nf where Nc#get
     map((mdbm.fc) ∘ (mdbm.axes),Base.Iterators.flatten(corner(mdbm)))
 end
 
-function getcornerval(ncubes::NCube{IT,FT,N},mdbm::MDBM_Problem{N,Nf,Nc}) where IT where FT where N where Nf where Nc
+function getcornerval(ncubes::NCube{IT,FT,N}, mdbm::MDBM_Problem{N,Nf,Nc}) where IT where FT where N where Nf where Nc
     #PostionsVectors=(mdbm.axes.(corner(nc,mdbm.T01)))
     # (mdbm.fc).( (mdbm.axes).(corner(nc,mdbm.T01)) )
     map((mdbm.fc) ∘ (mdbm.axes),corner(ncubes,mdbm.T01))
@@ -58,10 +70,7 @@ end
 
 
 
-
-
-
-function issingchange(FunTupleVector::Vector,Nf::Integer,Nc::Integer)::Bool
+function issingchange(FunTupleVector::Vector, Nf::Integer, Nc::Integer)::Bool
 all(
     [
         [
@@ -82,7 +91,7 @@ all(
 )#check for all condition
 end
 
-function _interpolate!(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,Nf,Nc},::Type{Val{0}}) where IT where FT where N where Nf where Nc
+function _interpolate!(ncubes::Vector{NCube{IT,FT,N}}, mdbm::MDBM_Problem{N,Nf,Nc}, ::Type{Val{0}}) where IT where FT where N where Nf where Nc
     isbracketing=map(nc->issingchange(getcornerval(nc,mdbm),Nf,Nc),ncubes) #TODO: parallelize
     deleteat!(ncubes,.!isbracketing)#removeing the non-bracketing ncubes
 
@@ -92,7 +101,7 @@ function _interpolate!(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,Nf,Nc
     return nothing
 end
 
-function _interpolate!(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,Nf,Nc},::Type{Val{1}}) where IT where FT where N where Nf where Nc
+function _interpolate!(ncubes::Vector{NCube{IT,FT,N}}, mdbm::MDBM_Problem{N,Nf,Nc},::Type{Val{1}}) where IT where FT where N where Nf where Nc
     for nc in ncubes
         FunTupleVector=getcornerval(nc,mdbm)
 
@@ -145,17 +154,52 @@ function _interpolate!(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,Nf,Nc
     return nothing
 end
 
-function _interpolate!(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,Nf,Nc},::Type{Val{Ninterp}}) where IT where FT where N where Ninterp where Nf where Nc
+function _interpolate!(ncubes::Vector{NCube{IT,FT,N}}, mdbm::MDBM_Problem{N,Nf,Nc}, ::Type{Val{Ninterp}}) where IT where FT where N where Ninterp where Nf where Nc
     error("order $(Ninterp) interpolation is not supperted (yet)")
 end
 
-function interpolate!(mdbm::MDBM_Problem{N,Nf,Nc};interpolationorder::Int=1) where N where Nf where Nc
+"""
+    interpolate!(mdbm::MDBM_Problem{N,Nf,Nc}; interpolationorder::Int=1)
+
+Interpolate the solution within the n-cube with order `interpolationorder`.
+ - `interpolationorder=0` provide the midpoint of the n-cube
+ - `interpolationorder=1` preform a linear fit and provide closest solution point to the mindpoint of the n-cube
+"""
+function interpolate!(mdbm::MDBM_Problem{N,Nf,Nc}; interpolationorder::Int=1) where N where Nf where Nc
     _interpolate!(mdbm.ncubes,mdbm, Val{interpolationorder})
 end
 
 
 
-function doubling!(mdbm::MDBM_Problem{N,Nf,Nc},directions::Vector{T}) where T<:Integer  where N where Nf where Nc
+"""
+    refine!(mdbm::MDBM_Problem{N,Nf,Nc}; directions::Vector{T}=collect(Int64,1:N)) where N where Nf where Nc where T<:Integer
+
+Double the resolution of the axes along the provided `directions` then halving the `ncubes` accordingly.
+
+# Examples
+```jldoctest
+julia> refine!(mymdbm)
+julia> refine!(mymdbm,[1,1,2])
+```
+"""
+function refine!(mdbm::MDBM_Problem{N,Nf,Nc}; directions::Vector{T}=collect(Int64,1:N)) where N where Nf where Nc where T<:Integer
+    doubling!(mdbm,directions)
+    refinencubes!(mdbm.ncubes,directions)
+    return nothing
+end
+
+"""
+    doubling!(mdbm::MDBM_Problem{N,Nf,Nc}, directions::Vector{T}) where T<:Integer  where N where Nf where Nc
+
+Double the resolution of the axes along the provided `directions`, then set the new size of the n-cubes.
+
+# Examples
+```jldoctest
+julia> doubling!(mymdbm)
+julia> doubling!(mymdbm,[1,2])
+```
+"""
+function doubling!(mdbm::MDBM_Problem{N,Nf,Nc}, directions::Vector{T}) where T<:Integer  where N where Nf where Nc
     axdoubling!.(mdbm.axes[directions])
     for nc in mdbm.ncubes
         for dir in directions
@@ -165,12 +209,17 @@ function doubling!(mdbm::MDBM_Problem{N,Nf,Nc},directions::Vector{T}) where T<:I
     end
 end
 
-function refine!(mdbm::MDBM_Problem{N,Nf,Nc}; directions::Vector{T}=collect(Int64,1:N)) where N where Nf where Nc where T<:Integer
-    doubling!(mdbm,directions)
-    refinencubes!(mdbm.ncubes,directions)
-    return nothing
-end
+"""
+     refinencubes!(ncubes::Vector{NCube{IT,FT,N}}, directions::Vector{T})
 
+Halving the `ncubes` along the provided `directions`.
+
+# Examples
+```jldoctest
+julia> refinencubes!(mymdbm.ncubes)
+julia> refinencubes!(mymdbm.ncubes,mymdbm,[1,2])
+```
+"""
 function refinencubes!(ncubes::Vector{NCube{IT,FT,N}}, directions::Vector{T}) where IT where FT where N where T<:Integer #{IT,FT,N} where IT where FT where N
     for dir in directions
         for nc in ncubes
@@ -188,7 +237,11 @@ end
 
 
 
+"""
+    getinterpolatedsolution(mdbm::MDBM_Problem{N,Nf,Nc})
 
+Provide the interpolated coordinates of the all the detected solution (approximately where foo(x,y) == 0 and c(x,y)>0).
+"""
 function getinterpolatedsolution(mdbm::MDBM_Problem{N,Nf,Nc}) where N where Nf where Nc
 [
     [
@@ -199,7 +252,14 @@ function getinterpolatedsolution(mdbm::MDBM_Problem{N,Nf,Nc}) where N where Nf w
     for nc in mdbm.ncubes]#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
 for i in 1:length(mdbm.axes)]
 end
-function getinterpolatedsolution(nc::NCube{IT,FT,N},mdbm::MDBM_Problem{N,Nf,Nc}) where IT where FT where N where Nf where Nc
+
+
+"""
+    getinterpolatedsolution(nc::NCube{IT,FT,N}, mdbm::MDBM_Problem{N,Nf,Nc})
+
+Provide the interpolated coordinates of the solution inside the provided n-cube `nc` (approximately where foo(x,y) == 0 and c(x,y)>0).
+"""
+function getinterpolatedsolution(nc::NCube{IT,FT,N}, mdbm::MDBM_Problem{N,Nf,Nc}) where IT where FT where N where Nf where Nc
 [
         (typeof(mdbm.axes[i].ticks).parameters[1])(
         (mdbm.axes[i].ticks[nc.corner[i]]*(1.0-(nc.posinterp[i]+1.0)/2.0)+
@@ -208,12 +268,31 @@ function getinterpolatedsolution(nc::NCube{IT,FT,N},mdbm::MDBM_Problem{N,Nf,Nc})
 for i in 1:length(mdbm.axes)]
 end
 
+"""
+    getevaluatedpoints(mdbm::MDBM_Problem{N,Nf,Nc})
+
+Provide all the coordinates where the function is evaluated.
+"""
 function getevaluatedpoints(mdbm::MDBM_Problem{N,Nf,Nc}) where N where Nf where Nc
     [[x.callargs[i] for x in mdbm.fc.fvalarg] for i in 1:N]
 end
+
+"""
+    getevaluatedpoints(mdbm::MDBM_Problem{N,Nf,Nc})
+
+Provide the functionvalues for all the coordinates where the function is evaluated.
+(see: `getevaluatedpoints`)
+"""
 function getevaluatedfunctionvalues(mdbm::MDBM_Problem{N,Nf,Nc}) where N where Nf where Nc
     [x.funval for x in mdbm.fc.fvalarg]
 end
+
+"""
+    getevaluatedconstraintvalues(mdbm::MDBM_Problem{N,Nf,Nc})
+
+Provide the constraints values for all the coordinates where the function is evaluated.
+(see: `getevaluatedpoints`)
+"""
 function getevaluatedconstraintvalues(mdbm::MDBM_Problem{N,Nf,Nc}) where N where Nf where Nc
     [x.cval for x in mdbm.fc.fvalarg]
 end
@@ -265,7 +344,23 @@ function generateneighbours(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,
     return nc_neighbour
 end
 
-function checkneighbour!(mdbm::MDBM_Problem{N,Nf,Nc};interpolationorder::Int=0,maxiteration::Int=0) where N where Nf where Nc#only for unite size cubes
+
+
+"""
+    checkneighbour!(mdbm::MDBM_Problem{N,Nf,Nc}; interpolationorder::Int=0, maxiteration::Int=0)
+
+Check the face-neighbouring n-cubes to discover the lost (missing) part of the solutions.
+
+It is possible, that the sub-manifold (e.g.: curve) of the solution is not completely detected (it is interrupted).
+This way the missing part can be explored similarly to a continuation method (with minimal function evaluation).
+
+It works only if the dimension of the solution object is larger the zero (the maifold is not a set of poins).
+
+    # Arguments
+    - `interpolationorder::Int=0`: interpolation order method of the neighbours checked
+    - `maxiteration::Int=0~: the max number of steps in the 'continuation-like' exploring. If zero, then infinity steps are allowed
+"""
+function checkneighbour!(mdbm::MDBM_Problem{N,Nf,Nc}; interpolationorder::Int=0, maxiteration::Int=0) where N where Nf where Nc#only for unite size cubes
 
 if isempty(mdbm.ncubes)
     println("There is no bracketing n-cubes to check!")
@@ -287,6 +382,11 @@ end
 
 
 
+"""
+    connect(mdbm::MDBM_Problem{N,Nf,Nc})
+
+Provide the edge connection (as a list of point-paris) of the solution point-cloud based on the face-neighbouring n-cubes.
+"""
 function connect(mdbm::MDBM_Problem{N,Nf,Nc}) where N where Nf where Nc
     #---------- line connection (no corener neighbour is needed) --------------
     DT1=Array{Tuple{Int64,Int64}}(undef,0)
@@ -301,7 +401,12 @@ function connect(mdbm::MDBM_Problem{N,Nf,Nc}) where N where Nf where Nc
     return DT1
 end
 
+"""
+    triangulation(DT1::Array{Tuple{Int64,Int64}})::Array{Tuple{Int64,Int64,Int64}}
 
+Provide the triangulation (as a list of point-triplets) of the solution point-cloud based on the face-neighbouring n-cubes.
+DT1 is the result of the edge connection performed by `connect`.
+"""
 function triangulation(DT1::Array{Tuple{Int64,Int64}})::Array{Tuple{Int64,Int64,Int64}}
 
     #DT=sort!()[DT1;[(d[2],d[1]) for d in DT1]]);
@@ -334,9 +439,18 @@ function triangulation(DT1::Array{Tuple{Int64,Int64}})::Array{Tuple{Int64,Int64,
 
 end
 
+"""
+    solve!(mdbm::MDBM_Problem{N,Nf,Nc}, iteration::Int; interpolationorder::Int=1)
 
+Refine the `MDBM_Problem` `iteration` times, then perform a neighbour check.
+`interpolationorder` defines the interpolation method within the n-cubes.
 
-function solve!(mdbm::MDBM_Problem{N,Nf,Nc},iteration::Int;interpolationorder::Int=1) where N where Nf where Nc
+# Examples
+```julia
+julia> solve!(mymdbm,4)
+```
+"""
+function solve!(mdbm::MDBM_Problem{N,Nf,Nc}, iteration::Int; interpolationorder::Int=1) where N where Nf where Nc
     interpolate!(mdbm,interpolationorder=interpolationorder)
     for k=1:iteration
         refine!(mdbm)

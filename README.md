@@ -179,10 +179,3 @@ Dr. Daniel Bachrathy
 MDBM is a fiscally sponsored project of [NumFOCUS](https://numfocus.org), a
 nonprofit dedicated to supporting the open source scientific computing
 community.
-
-## Licence: CC BY-NC-ND Licence 
-<https://creativecommons.org/licenses/by-nc-nd/2.0/>
-
-<img src="assets/by-nc-nd.png"
-     alt="CC BY-NC-ND"
-     style="float: right; margin-right: 10px; width: 200px;" />
