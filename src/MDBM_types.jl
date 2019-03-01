@@ -160,10 +160,10 @@ function MDBM_Problem(fc::Function,axes,ncubes::Vector{NCube{IT,FT,N}},Nf,Nc) wh
     ,T01,T11pinv)
 end
 
-function MDBM_Problem(f::Function, axes::Vector{<:Axis};constraint::Function=(x...,)->true, memoization::Bool=true,
+function MDBM_Problem(f::Function, axes0::Vector{<:Axis};constraint::Function=(x...,)->true, memoization::Bool=true,
     Nf=length(f(getindex.(axes,1)...)),
     Nc=length(constraint(getindex.(axes,1)...)))#Float16(1.), nothing
-
+    axes=deepcopy.(axes0);
     argtypesofmyfunc=map(x->typeof(x).parameters[1], axes);#Argument Type
     AT=Tuple{argtypesofmyfunc...};
     type_f=Base.return_types(f,AT)
@@ -192,7 +192,6 @@ end
 function MDBM_Problem(f::Function, a::Vector{<:AbstractVector};constraint::Function=(x...,)->true, memoization::Bool=true,
     Nf=length(f(getindex.(a,1)...)),
     Nc=length(constraint(getindex.(a,1)...)))
-
     axes=[Axis(ax) for ax in a]
     MDBM_Problem(f,axes,constraint=constraint,memoization=memoization,Nf=Nf,Nc=Nc)#,Vector{NCube{Int64,Float64,Val(Ndim)}}(undef, 0))
 end
