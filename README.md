@@ -25,7 +25,7 @@ Geometrically, root-finding algorithms of __f__(__x__)=0 find one intersection p
 In many applications, this 1-dimensional intersection problem must be extended to higher dimensions, e.g.: intersections of surfaces in a 3D space (volume), which can be described as a system on non-linear implicit equations. In higher dimensions, the existence of multiple solutions becomes very important, since the intersection of two surfaces can create multiple intersection curves.
 
 MDBM algorithm canhandle automatically:
-- multiple solutions 
+- multiple solutions
 - arbitrary number of parameter (typically: 3-6)
 - arbitrary number implicit equations
 - multiple constraints in the parameter space
@@ -45,9 +45,7 @@ The software in this ecosystem was developed as part of academic research. If yo
 
 Preparation
 ```julia
-include("MDBM.jl")
-using Reexport
-@reexport using .MDBM
+using MDBM
 
 using PyPlot;
 pygui(true);
@@ -67,7 +65,7 @@ ax2=Axis(-5:2:5.0,"y") # initial grid in y direction
 
 mymdbm=MDBM_Problem(foo,[ax1,ax2],constraint=c)
 iteration=5 #number of refinements (resolution doubling)
-solve!(mymdbm,iteration) 
+solve!(mymdbm,iteration)
 
 
 #points where the function foo was evaluated
@@ -91,7 +89,7 @@ for i in 1:length(myDT1)
     P1=getinterpolatedsolution(mymdbm.ncubes[dt[1]],mymdbm)
     P2=getinterpolatedsolution(mymdbm.ncubes[dt[2]],mymdbm)
     plot([P1[1],P2[1]],[P1[2],P2[2]], color="k")
-end 
+end
 ```
 
 <img src="assets/circe_2D_line.png"
@@ -165,7 +163,7 @@ plot(a_sol,b_sol,linestyle="", marker=".", markersize=1)
 ## History
 
 I am an assistant professor at the Budapest University of Technology and Economics, at the Faculty of Mechanical Engineering, the Department of Applied Mechanics.
-During my studies and research, I have to determine stability charts of models described by delayed differential equations, which are typically formed as a "3 parameter / 2 implicit equation" problem. I have faced the difficulty that there is no applicable solution in any available software (e.g.: Mathematica, Matlab,...) which could easily be used in engineering problems. 
+During my studies and research, I have to determine stability charts of models described by delayed differential equations, which are typically formed as a "3 parameter / 2 implicit equation" problem. I have faced the difficulty that there is no applicable solution in any available software (e.g.: Mathematica, Matlab,...) which could easily be used in engineering problems.
 Due to this reason, I have started to develop the Multi-Dimensional Bisection Method since 2006 in Matlab, and I have been improving it since, by adding new features from time to time.  
 I hope that others also find this package a useful tool in their work.
 

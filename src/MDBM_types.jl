@@ -6,17 +6,17 @@ struct MDBMcontainer{RTf,RTc,AT}
 end
 
 #TODO memoization ofr multiple functions Vector{Function}
-struct MemF{RTf,RTc,AT} <:Function
-    f::Function
-    c::Function
+struct MemF{fT,cT,RTf,RTc,AT} <:Function
+    f::fT
+    c::cT
     fvalarg::Vector{MDBMcontainer{RTf,RTc,AT}}#funval,callargs
     memoryacc::Vector{Int64} #number of function value call for already evaluated parameters
-    MemF(f::Function,c::Function,cont::Vector{MDBMcontainer{RTf,RTc,AT}}) where {RTf,RTc,AT}=new{RTf,RTc,AT}(f,c,cont,[Int64(0)])
+    MemF(f::fT,c::cT,cont::Vector{MDBMcontainer{RTf,RTc,AT}}) where {fT,cT,RTf,RTc,AT}=new{fT,cT,RTf,RTc,AT}(f,c,cont,[Int64(0)])
 end
 
-(memfun::MemF{RTf,RTc,AT})(::Type{RTf},::Type{RTc},args...,) where {RTf,RTc,AT} =( memfun.f(args...,)::RTf, memfun.c(args...,)::RTc)
+(memfun::MemF{fT,cT,RTf,RTc,AT})(::Type{RTf},::Type{RTc},args...,) where {fT,cT,RTf,RTc,AT} =( memfun.f(args...,)::RTf, memfun.c(args...,)::RTc)
 
-function (memfun::MemF{RTf,RTc,AT})(args...,) where {RTf,RTc,AT}
+function (memfun::MemF{fT,cT,RTf,RTc,AT})(args...,) where {fT,cT,RTf,RTc,AT}
     location=searchsortedfirst(memfun.fvalarg,args,lt=(x,y)->isless(x.callargs,y));
     if length(memfun.fvalarg)<location
         x=memfun(RTf,RTc,args...,);
@@ -32,7 +32,7 @@ function (memfun::MemF{RTf,RTc,AT})(args...,) where {RTf,RTc,AT}
     end
 end
 
-function (memfun::MemF{RTf,RTc,AT})(args::Tuple) where {RTf,RTc,AT}
+function (memfun::MemF{fT,cT,RTf,RTc,AT})(args::Tuple) where {fT,cT,RTf,RTc,AT}
     memfun(args...,)
 end
 
@@ -65,40 +65,25 @@ function Axis(a::Axis)
     a
 end
 
-
-function fncreator(axes)
-    fn="function (ax::$(typeof(axes)))(ind...)\n("
-    for i in eachindex(axes)
-        fn*="ax[$i][ind[$i]]"
-        if i < length(axes)
-            fn*=", "
-        end
-    end
-    return fn*")\nend"
+struct Axes{N,aT}
+    axs::aT
 end
-
-function createAxesGetindexFunction(axes)
-     eval(Meta.parse(fncreator(axes)))
+function Axes(axs...)
+    axstosave=Axis.(axs)
+    Axes{length(axstosave),typeof(axstosave)}(Axis.(axstosave))
 end
-
-function fncreatorTuple(axes)
-    fn="function (ax::$(typeof(axes)))(ind)\n("
-    for i in eachindex(axes)
-        fn*="ax[$i][ind[$i]]"
-        if i < length(axes)
-            fn*=", "
-        end
-    end
-    return fn*")\nend"
-end
-function createAxesGetindexFunctionTuple(axes)
-     eval(Meta.parse(fncreatorTuple(axes)))
-end
+(axs::Axes)(ind...) = getindex.(axs.axs,ind)
+# (axs::Axes)(ind::AbstractVector{<:Integer}) = axs(ind...)
+Base.getindex(axs::Axes,inds...) = axs.axs[inds...]
+Base.getindex(axs::Axes,inds::Vector{Integer}) = axs.axs[inds]
+Base.iterate(axs::Axes) = iterate(axs.axs)
+Base.iterate(axs::Axes,i) = iterate(axs.axs,i)
+Base.size(::Axes{N,aT}) where {N,aT} = (N,)
+Base.size(::Axes{N,aT},::Integer) where {N,aT} = N
+Base.length(::Axes{N,aT}) where {N,aT} = N
 
 
-
-
-struct NCube{IT<:Integer,FT<:AbstractFloat,ValNdim}
+struct NCube{IT,FT,ValNdim}
     corner::MVector{ValNdim,IT} #"bottom-left" #Integer index of the axis
     size::MVector{ValNdim,IT}#Integer index of the axis
     posinterp::MVector{ValNdim,FT}#relative coordinate within the cube "(-1:1)" range
@@ -108,7 +93,6 @@ struct NCube{IT<:Integer,FT<:AbstractFloat,ValNdim}
 end
 
 
-
 Base.isless(a::NCube{IT,FT,N},b::NCube{IT,FT,N}) where IT where FT where N = Base.isless([a.corner,a.size],[b.corner,b.size])
 Base.isequal(a::NCube{IT,FT,N},b::NCube{IT,FT,N}) where IT where FT where N = all([a.corner==b.corner,a.size==b.size])
 import Base.==
@@ -116,7 +100,7 @@ import Base.==
 
 
 """
-    struct MDBM_Problem{N,Nf,Nc}
+    struct MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT}
 
 Store the main data for the Multi-Dimensional Bisection Method.
 
@@ -139,23 +123,21 @@ ax2=Axis(-5:2:5.0,"y") # initial grid in y direction
 mymdbm=MDBM_Problem(foo,[ax1,ax2],constraint=c)
 ```
 """
-struct MDBM_Problem{N,Nf,Nc}
+struct MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     "(memoized) function and constraint in a Tuple"
-    fc::Function
+    fc::fcT
     "The vector of discretized parameters space"
-    axes::NTuple{N,Axis}
+    axes::Axes{N,aT}
     "the bracketing n-cubes (which contains a solution)"
-    ncubes::Vector{NCube{IT,FT,N}} where IT<:Integer where FT<:AbstractFloat
-    T01::AbstractVector{<:AbstractVector}#SArray#
-    T11pinv::SMatrix
+    ncubes::Vector{NCube{IT,FT,N}}
+    T01::t01T#
+    T11pinv::t11T
 end
 
-function MDBM_Problem(fc::Function,axes,ncubes::Vector{NCube{IT,FT,N}},Nf,Nc) where IT<:Integer where FT<:AbstractFloat where N
+function MDBM_Problem(fc::fcT,axes,ncubes::Vector{NCube{IT,FT,N}},Nf,Nc) where fcT<:Function where IT<:Integer where FT<:AbstractFloat where N
     T01=T01maker(Val(N))
     T11pinv=T11pinvmaker(Val(N))
-    createAxesGetindexFunction((axes...,))
-    createAxesGetindexFunctionTuple((axes...,))
-    MDBM_Problem{N,Nf,Nc}(fc,(axes...,),
+    MDBM_Problem{fcT,N,Nf,Nc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc,Axes(axes...),
     [NCube{IT,FT,N}(SVector{N,IT}([x...]),SVector{N,IT}(ones(IT,length(x))),SVector{N,FT}(zeros(IT,length(x))),true) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:]
     ,T01,T11pinv)
 end
