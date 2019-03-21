@@ -73,7 +73,7 @@ end
 
 
 
-function issingchange(FunTupleVector::Vector, Nf::Integer, Nc::Integer)::Bool
+function issingchange(FunTupleVector::AbstractVector, Nf::Integer, Nc::Integer)::Bool
     all([
         [
         any((c)->!isless(c[1][fi], zero(c[1][fi])), FunTupleVector)
@@ -253,6 +253,21 @@ function getinterpolatedsolution(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,
 for i in 1:length(mdbm.axes)]
 end
 
+"""
+    getinterpolatedsolution(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,Nf,Nc})
+
+Provide the interpolated coordinates of the detected solution for the selected n-cubes (approximately where foo(x,y) == 0 and c(x,y)>0).
+"""
+function getinterpolatedsolution(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,Nf,Nc}) where IT where FT where N  where Nf where Nc
+[
+    [
+        (typeof(mdbm.axes[i].ticks).parameters[1])(
+        (mdbm.axes[i].ticks[nc.corner[i]]*(1.0-(nc.posinterp[i]+1.0)/2.0)+
+        mdbm.axes[i].ticks[nc.corner[i]+1]*((nc.posinterp[i]+1.0)/2.0))
+        )
+    for nc in ncubes]#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
+for i in 1:length(mdbm.axes)]
+end
 
 """
     getinterpolatedsolution(nc::NCube{IT,FT,N}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})

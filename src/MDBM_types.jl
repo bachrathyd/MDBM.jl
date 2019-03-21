@@ -83,10 +83,10 @@ Base.size(::Axes{N,aT},::Integer) where {N,aT} = N
 Base.length(::Axes{N,aT}) where {N,aT} = N
 
 
-struct NCube{IT,FT,ValNdim}
-    corner::MVector{ValNdim,IT} #"bottom-left" #Integer index of the axis
-    size::MVector{ValNdim,IT}#Integer index of the axis
-    posinterp::MVector{ValNdim,FT}#relative coordinate within the cube "(-1:1)" range
+struct NCube{IT,FT,N}
+    corner::MVector{N,IT} #"bottom-left" #Integer index of the axis
+    size::MVector{N,IT}#Integer index of the axis
+    posinterp::MVector{N,FT}#relative coordinate within the cube "(-1:1)" range
     bracketingncube::Bool
     # gradient ::MVector{MVector{T}}
     # curvnorm::Vector{T}
