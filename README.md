@@ -2,7 +2,7 @@
 
 [![Powered by NumFOCUS](https://img.shields.io/badge/powered%20by-NumFOCUS-orange.svg?style=flat&colorA=E1523D&colorB=007D8A)](http://numfocus.org)
 
-Multi-Dimensional Bisection Method (MDBM) is an efficient and robust root-finding algorithm, which can be used to determine whole high-dimensional submanifolds (points, curves, surfaces…) of the roots of implicit non-linear equation systems, even in cases, where the number of unknowns surpasses the number of equations.
+Multi-Dimensional Bisection Method (MDBM) is an efficient and robust root-finding algorithm, which can be used to determine whole high-dimensional submanifolds (points, curves, surfaces…) of the roots of implicit non-linear equation systems, especially in cases, where the number of unknowns surpasses the number of equations.
 
 <a href="https://www.codecogs.com/eqnedit.php?latex=f_i(x_j)=0&space;\quad&space;i=1...k&space;\quad&space;j=1...l,&space;\quad&space;k&space;\leq&space;l" target="_blank"><img src="https://latex.codecogs.com/gif.latex?f_i(x_j)=0&space;\quad&space;i=1...k&space;\quad&space;j=1...l,&space;\quad&space;k&space;\leq&space;l" title="f_i(x_j)=0 \quad i=1...k \quad j=1...l, \quad k \leq l" /></a>
 
@@ -24,15 +24,14 @@ This method is very robust and it always tends to the solution if the signs of t
 Geometrically, root-finding algorithms of __f__(__x__)=0 find one intersection point of the graph of the function with the axis of the independent variable.
 In many applications, this 1-dimensional intersection problem must be extended to higher dimensions, e.g.: intersections of surfaces in a 3D space (volume), which can be described as a system on non-linear implicit equations. In higher dimensions, the existence of multiple solutions becomes very important, since the intersection of two surfaces can create multiple intersection curves.
 
-MDBM algorithm canhandle automatically:
-- multiple solutions
-- arbitrary number of parameter (typically: 3-6)
-- arbitrary number implicit equations
-- multiple constraints in the parameter space
-- handle degenerated functions
-- first order interpolation (and convergence rate)
-- provides the gradients of the equations for the roots
+MDBM algorithm can handle:
+* multiple solutions
+* arbitrary number of variable (typically: 3-6)
+* arbitrary number of implicit equations
+* multiple constraints in the parameter space
+* degenerated functions
 
+while providing the gradients of the equations for the roots by means of first order interpolation (and convergence rate).
 
 ## Citing
 The software in this ecosystem was developed as part of academic research. If you use the MDBM.jl package as part of your research, teaching, or other work, I would be grateful if you could cite my corresponding publication: <https://pp.bme.hu/me/article/view/1236/640>
