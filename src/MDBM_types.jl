@@ -142,7 +142,7 @@ function MDBM_Problem(fc::fcT,axes,ncubes::Vector{NCube{IT,FT,N}},Nf,Nc) where f
     ,T01,T11pinv)
 end
 
-function MDBM_Problem(f::Function, axes0::Vector{<:Axis};constraint::Function=(x...,)->true, memoization::Bool=true,
+function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis};constraint::Function=(x...,)->true, memoization::Bool=true,
     Nf=length(f(getindex.(axes0,1)...)),
     Nc=length(constraint(getindex.(axes0,1)...)))#Float16(1.), nothing
     axes=deepcopy.(axes0);
@@ -171,7 +171,7 @@ function MDBM_Problem(f::Function, axes0::Vector{<:Axis};constraint::Function=(x
     MDBM_Problem(fun,axes,Vector{NCube{Int64,Float64,Ndim}}(undef, 0),Nf,Nc)
 end
 
-function MDBM_Problem(f::Function, a::Vector{<:AbstractVector};constraint::Function=(x...,)->true, memoization::Bool=true,
+function MDBM_Problem(f::Function, a::AbstractVector{<:AbstractVector};constraint::Function=(x...,)->true, memoization::Bool=true,
     Nf=length(f(getindex.(a,1)...)),
     Nc=length(constraint(getindex.(a,1)...)))
     axes=[Axis(ax) for ax in a]
