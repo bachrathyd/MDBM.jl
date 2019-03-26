@@ -1,5 +1,11 @@
 function axdoubling!(ax::Axis)
-    sort!(append!(ax.ticks, ax.ticks[1:end - 1] + diff(ax.ticks) / 2); alg = QuickSort)
+    #WRONG: sort!(append!(ax.ticks, ax.ticks[1:end - 1] + diff(ax.ticks) / 2); alg = QuickSort)
+    #the axis could be in a non-sorted form
+
+    doubleindex=(2:2*length(ax.ticks)).÷2
+    doubleindex[2:2:end] .+=length(ax.ticks)
+    append!(ax.ticks, ax.ticks[1:end - 1] + diff(ax.ticks) / 2)
+    ax.ticks[1:end].=ax.ticks[doubleindex];
 end
 
 
