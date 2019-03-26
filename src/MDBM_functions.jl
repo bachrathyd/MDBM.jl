@@ -251,7 +251,7 @@ end
 Provide the interpolated coordinates of the all the detected solution (approximately where foo(x,y) == 0 and c(x,y)>0).
 """
 function getinterpolatedsolution(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT ,N ,Nf ,Nc ,t01T ,t11T ,IT ,FT,aT}
-    [
+[
     [
         (typeof(mdbm.axes[i].ticks).parameters[1])((mdbm.axes[i].ticks[nc.corner[i]] * (1.0 - (nc.posinterp[i] + 1.0) / 2.0) +
         mdbm.axes[i].ticks[nc.corner[i] + 1] * ((nc.posinterp[i] + 1.0) / 2.0)))
@@ -264,7 +264,7 @@ end
 
 Provide the interpolated coordinates of the detected solution for the selected n-cubes (approximately where foo(x,y) == 0 and c(x,y)>0).
 """
-function getinterpolatedsolution(ncubes::Vector{NCube{IT,FT,N}},mdbm::MDBM_Problem{N,Nf,Nc}) where IT where FT where N  where Nf where Nc
+function getinterpolatedsolution(ncubes::Vector{NCube{IT,FT,N}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT ,N ,Nf ,Nc ,t01T ,t11T ,IT ,FT,aT}
 [
     [
         (typeof(mdbm.axes[i].ticks).parameters[1])(
