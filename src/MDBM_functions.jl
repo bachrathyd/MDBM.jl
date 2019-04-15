@@ -111,8 +111,7 @@ end
 function _interpolate!(ncubes::Vector{NCube{IT,FT,N}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}})  where {fcT ,N ,Nf ,Nc ,t01T ,t11T ,IT ,FT,aT}
     for nc in ncubes
         FunTupleVector = getcornerval(nc, mdbm)
-
-        if all(
+        if Nc==0 || all(
             any((c)->!isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
             for fi in 1:length(FunTupleVector[1][2])
             )# check the constraint: do wh have to compute at all?!?
