@@ -5,7 +5,7 @@ struct MDBMcontainer{RTf,RTc,AT}
     callargs::AT
 end
 
-#TODO memoization ofr multiple functions Vector{Function}
+#TODO memoization for multiple functions Vector{Function}
 struct MemF{fT,cT,RTf,RTc,AT} <:Function
     f::fT
     c::cT

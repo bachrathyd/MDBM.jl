@@ -504,6 +504,7 @@ function is_sorted_in_sorted(a::AbstractVector, b::AbstractVector)::Array{Bool,1
     startindex = 1;
     for ind2check in 1:length(a)
         detectedrange = searchsorted(b[startindex:end], a[ind2check])
+        etectedrange = searchsorted(view(b,startindex:length(b)), a[ind2check]) # still: it is the critical line!!!
         iscontained[ind2check] = !isempty(detectedrange)
         startindex = max(detectedrange.stop, detectedrange.start) + startindex - 1
         if startindex > length(b)
