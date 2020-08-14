@@ -42,9 +42,8 @@ scatter(x_sol,y_sol,s=5)
 ```
 """
 module MDBM
-using Reexport
-@reexport using StaticArrays
-@reexport using LinearAlgebra
+using StaticArrays
+using LinearAlgebra
 
 export MDBM_Problem, Axis,
  solve!, interpolate!, refine!, checkneighbour!,
