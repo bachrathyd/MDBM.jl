@@ -177,7 +177,7 @@ function MDBM_Problem(f::Function, a::AbstractVector{<:AbstractVector};constrain
     Nf=f(getindex.(a,1)...) === nothing ? 0 : length(f(getindex.(a,1)...)),
     Nc=constraint(getindex.(a,1)...) === nothing ? 0 : length(constraint(getindex.(a,1)...)))
     axes=[Axis(ax) for ax in a]
-    MDBM_Problem(f, axes, constraint = onstraint, memoization=memoization, Nf=Nf, Nc=Nc)#,Vector{NCube{Int64,Float64,Val(Ndim)}}(undef, 0))
+    MDBM_Problem(f, axes, constraint = constraint, memoization=memoization, Nf=Nf, Nc=Nc)#,Vector{NCube{Int64,Float64,Val(Ndim)}}(undef, 0))
 end
 
 
