@@ -1,5 +1,5 @@
 name = "MDBM"
-uuid = "ea0cff06-48de-41e3-bd0e-d3c1feffd247"
+uuid = "dd61e66b-39ce-57b0-8813-509f78be4b4d"
 authors = ["Daniel Bachrathy"]
 version = "0.1.7"
 
