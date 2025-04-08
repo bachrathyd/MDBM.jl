@@ -12,8 +12,11 @@ default(size=(1500, 1200), titlefont=(15, "times"), legendfontsize=13, guidefont
 
 #Solution of an uncertain implicit equation
 
+function foo4(x,y,z,r)
+    x^2.0+y^2.0+z-r^2.0,z-y#,x-sin(z)#
+end
 function foo3(x,y,z)
-    x^2.0+y^2.0+z-2.0^2.0#,x-sin(z)
+    x^2.0+y^2.0+z-2.0^2.0#,x-sin(z)#,z-y#
 end
 function foo2(x,y)
     x^2.0+y^2.0-2.0^2.0
@@ -25,11 +28,10 @@ solve!(mymdbm,0)
 
 
 
-interpolate!(mymdbm,interpolationorder=0)
+#interpolate!(mymdbm,interpolationorder=0)
 interpolate!(mymdbm,interpolationorder=1)
 
-x_sol,y_sol,z_sol=
-aaavyxcv=getinterpolatedsolution(mymdbm)
+x_sol,y_sol,z_sol=getinterpolatedsolution(mymdbm)
 scatter(x_sol,y_sol,z_sol,ms=1)
 
 #x_sol,y_sol=getinterpolatedsolution(mymdbm)
@@ -39,7 +41,6 @@ plot!(xticks =mymdbm.axes[1].ticks,yticks =mymdbm.axes[2].ticks)
 
 
 DT1=connect(mymdbm)
-
 for edges in DT1
 plot!(
     x_sol[[edges...]],

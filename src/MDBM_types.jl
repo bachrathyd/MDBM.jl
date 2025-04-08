@@ -84,6 +84,17 @@ Base.length(::Axes{N,aT}) where {N,aT} = N
 
 
 
+struct PositionTree{N,T}
+    p::SVector{N,T}
+    subpoints::Vector{PositionTree{N,T}}
+end
+# Constructor for a single position (empty subpoints)
+PositionTree(p::MVector{N,T}) where {N,T} = PositionTree{N,T}(p, PositionTree{N,T}[])
+# Constructor accepting any AbstractArray, automatically converting to MVector
+PositionTree(p::AbstractArray{T}) where {T} = PositionTree(MVector{length(p),T}(p))
+
+
+
 
 struct NCube{IT,FT,N}
     corner::MVector{N,IT} #"bottom-left" #Integer index of the axis
