@@ -99,7 +99,7 @@ scatter(x_sol,y_sol,z_sol,ms=1)
 #scatter()
 
 nc=mymdbm.ncubes[1]
-for     nc in mymdbm.ncubes
+for nc in mymdbm.ncubes
     x0,y0,z0=getinterpolatedsolution(nc.posinterp, nc.corner, mymdbm.axes)
    # scatter!([x0],[y0],[z0],ms=5)
     #x0,y0=getinterpolatedsolution(nc.posinterp, nc.corner, mymdbm.axes)
