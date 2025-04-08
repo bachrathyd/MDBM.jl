@@ -81,28 +81,106 @@ function T11pinvmaker(valk::Val{kdim}) where {kdim}
     SMatrix{kdim + 1,2^kdim}(T11pinv)
 end
 
+"""
+    generate_faces_indices(n)
 
-function generate_faces_indices(n::Int)
-    @warn "Nem jó verzió van itt"
-    corners = [SVector{n}(digits(i, base=2, pad=n) .== 1) for i in 0:(2^n - 1)]
-    faces = Vector{Vector{SVector{n,Bool}}}(undef, 2*n)
+Generates the faces of an n-dimensional cube.
+
+# Arguments
+- `n::Int`: Dimension of the cube.
+
+# Returns
+- `faces`: Vector containing the faces, each face represented by a vector of corners.
+- `fixed_dims`: Vector containing tuples indicating the dimension and the side (0 or 1) fixed for each face.
+"""
+function generate_faces_indices(n)
+    corners = [SVector{n}(digits(i, base=2, pad=n) .== 1) for i in 0:(2^n-1)]
+    faces = Vector{Vector{SVector{n,Bool}}}(undef, 2 * n)
+    fixed_dims = Vector{Tuple{Int,Bool}}(undef, 2 * n)
 
     idx = 1
     for dim in 1:n
         for side in [false, true]
             face = filter(c -> c[dim] == side, corners)
             faces[idx] = face
+            fixed_dims[idx] = (dim, side)
             idx += 1
         end
     end
 
-    return faces
+    return faces, fixed_dims
 end
 
-function faces(ncube::NCube{IT,FT,N}) where {IT,FT,N}
-    @warn "Nem jó verzió van itt"
-    faces_index=generate_faces_indices(N)
-    [NCube{IT,FT,N-1}(SVector{N,IT}([x...]),SVector{N,IT}(ones(IT,length(x))),SVector{N,FT}(zeros(IT,length(x))),true) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:]
+"""
+    generate_sub_faces(face, fixed_dims)
+
+Generates sub-faces of a given face by fixing additional dimensions.
+
+# Arguments
+- `face`: The current face represented by a vector of corners.
+- `fixed_dims::Vector{Tuple{Int,Bool}}`: Dimensions already fixed in the current face along with their sides.
+
+# Returns
+- `sub_faces`: Vector containing sub-faces derived from the current face.
+- `sub_fixed_dims`: Vector containing tuples indicating the new dimension and side fixed for each sub-face.
+- `all_fixed_dims`: Vector containing tuples of all dimensions and sides fixed including previous steps.
+"""
+function generate_sub_faces(face, fixed_dims::Vector{Tuple{Int,Bool}})
+    n = length(face[1])
+    sub_faces = Vector{Vector{SVector{n,Bool}}}(undef, 0)
+    sub_fixed_dims = Vector{Tuple{Int,Bool}}(undef, 0)
+    fixed_dimensions_only = [fd[1] for fd in fixed_dims]
+    free_dims = setdiff(1:n, fixed_dimensions_only)
+
+    for dim in free_dims
+        for side in [false, true]
+            sub_face = filter(c -> c[dim] == side, face)
+            push!(sub_faces, sub_face)
+            push!(sub_fixed_dims, (dim, side))
+        end
+    end
+
+    all_fixed_dims = [vcat(fixed_dims, [sf]) for sf in sub_fixed_dims]
+
+    return sub_faces, all_fixed_dims#, sub_fixed_dims, 
+end
+
+
+function interpsubcubesolution(faces, fixed_dims, corner, size,  mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT ,N ,Nf ,Nc ,t01T ,t11T ,IT ,FT,aT}
+    posall_tree = Any[]
+
+    for (face, fixdim) in zip(faces, fixed_dims)
+        FunTupleVector = MDBM.getcornerval([corner .+ size .* T for T in face], mdbm)
+
+        fixed_dimensions_only = [fd[1] for fd in fixdim]
+        free_dims = setdiff(1:N, fixed_dimensions_only)
+        Nfree = length(free_dims)
+
+        T11pinv = MDBM.T11pinvmaker(Val(length(free_dims)))
+
+        posinterp = zeros(Float64, N)
+        posinterp[getindex.(fixdim, 1)] .= -1 .+ 2 .* getindex.(fixdim, 2)
+        posinterp[free_dims] .= MDBM.fit_hyperplane(FunTupleVector, Nfree, Nf, Nc, typeof(FunTupleVector[1][1][1]), T11pinv)
+
+        normp = 50000.0
+        ncubetolerance = 0.001
+
+        if norm(posinterp, normp) < 1.0 + ncubetolerance
+            #print("$Nfree ok:")
+            #@show face
+
+            if Nfree >= Nf
+                edges, all_edge_fixed_dims = generate_sub_faces(face, fixdim)
+                posall_tree_sub = interpsubcubesolution(edges, all_edge_fixed_dims, corner, size, mdbm)
+                push!(posall_tree, [getinterpolatedsolution(posinterp,corner, mdbm.axes), posall_tree_sub])
+            end
+
+
+        else
+            #println("$Nfree x")
+        end
+    end
+    return posall_tree
 end
 
 function issingchange(FunTupleVector::AbstractVector, Nf::Integer, Nc::Integer)::Bool
@@ -208,7 +286,7 @@ function _interpolate_subcubes!(nc::NCube{IT,FT,N}, Nsub::Int,mdbm::MDBM_Problem
 
     faces, face_fixed_dims = generate_faces_indices(3)
     @warn "asdfasdf"
-error("asdgf")
+    error("asdgf")
 
     T11pinv=MDBM.T11pinvmaker(Val(N-1))
     for face in faces
@@ -367,8 +445,8 @@ function getinterpolatedsolution(nc::NCube{IT,FT,N}, mdbm::MDBM_Problem{fcT,N,Nf
 for i in 1:length(mdbm.axes)]
 end
 
-function getinterpolatedsolution(posinterp,corner, axes)
-    [
+function getinterpolatedsolution(posinterp,corner, axes::Axes{N,aT}) where {N,aT}
+  [
         (typeof(axes[i].ticks).parameters[1])((axes[i].ticks[corner[i]] * (1.0 - (posinterp[i] + 1.0) / 2.0) +
         axes[i].ticks[corner[i] + 1] * ((posinterp[i] + 1.0) / 2.0)))#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
 for i in 1:length(axes)]
