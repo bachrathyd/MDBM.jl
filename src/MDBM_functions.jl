@@ -65,6 +65,10 @@ function getcornerval(ncubes::NCube{IT,FT,N}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01
     map(x->((mdbm.fc) ∘ (mdbm.axes))(x...), corner(ncubes, mdbm.T01))
 end
 
+function getcornerval(corers, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT ,N ,Nf ,Nc ,t01T ,t11T ,IT ,FT,aT}
+    map(x->((mdbm.fc) ∘ (mdbm.axes))(x...), corers)
+end
+
 
 function T01maker(valk::Val{kdim}) where {kdim}
     SVector{2^kdim}([
@@ -78,6 +82,28 @@ function T11pinvmaker(valk::Val{kdim}) where {kdim}
 end
 
 
+function generate_faces_indices(n::Int)
+    @warn "Nem jó verzió van itt"
+    corners = [SVector{n}(digits(i, base=2, pad=n) .== 1) for i in 0:(2^n - 1)]
+    faces = Vector{Vector{SVector{n,Bool}}}(undef, 2*n)
+
+    idx = 1
+    for dim in 1:n
+        for side in [false, true]
+            face = filter(c -> c[dim] == side, corners)
+            faces[idx] = face
+            idx += 1
+        end
+    end
+
+    return faces
+end
+
+function faces(ncube::NCube{IT,FT,N}) where {IT,FT,N}
+    @warn "Nem jó verzió van itt"
+    faces_index=generate_faces_indices(N)
+    [NCube{IT,FT,N-1}(SVector{N,IT}([x...]),SVector{N,IT}(ones(IT,length(x))),SVector{N,FT}(zeros(IT,length(x))),true) for x in Iterators.product((x->1:(length(x.ticks)-1)).(axes)...,)][:]
+end
 
 function issingchange(FunTupleVector::AbstractVector, Nf::Integer, Nc::Integer)::Bool
     all([
@@ -107,70 +133,114 @@ function _interpolate!(ncubes::Vector{NCube{IT,FT,N}}, mdbm::MDBM_Problem{fcT,N,
     end
     return nothing
 end
+function fit_hyperplane(FunTupleVector,N,Nf,Nc,FT,T11pinv)
+    posinterp = zeros(Float64,3)
+    if Nc==0 || all(
+        any((c)->!isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
+        for fi in 1:length(FunTupleVector[1][2])
+        )# check the constraint: do wh have to compute at all?!?
+
+        As = zero(MVector{Nf + Nc,FT})
+        ns = zero(MMatrix{N,Nf + Nc,FT})
+
+        #for f---------------------
+        for kf = 1:Nf#length(FunTupleVector[1][1])
+            solloc = T11pinv * [FunTupleVector[kcubecorner][1][kf] for kcubecorner = 1:length(FunTupleVector)]
+            As[kf] = solloc[end];
+            ns[:,kf] .= solloc[1:end - 1];
+        end
+
+        #for c---if needed: that is, it is close to the boundary--------
+        activeCostraint = 0;
+        for kf = 1:Nc#length(FunTupleVector[1][2])
+            #TODO: mivan a többszörös C teljesülése esetén!?!??!# ISSUE
+            if any((c)->!isless(zero(c[2][kf]), c[2][kf]), FunTupleVector) && length(As) < N  # use a constraint till it reduces the dimension to zero (point) and no further
+                solloc = T11pinv * [FunTupleVector[kcubecorner][2][kf] for kcubecorner = 1:length(FunTupleVector)]
+                activeCostraint += 1;
+                As[Nf + activeCostraint] = solloc[end];
+                ns[:,Nf + activeCostraint] .= solloc[1:end - 1];
+            end
+        end
+
+        if (Nf + activeCostraint) == 0
+            posinterp= zero(FT)
+        else
+            # first two leads to error in the fucntion of constant due to the behaviour of pinv (eg. [1 0;0 1;0 0]/[1 0; 0 0; 0 0])
+            # nc.posinterp[:] .= transpose(view(ns, :, 1:(Nf + activeCostraint))) \ view(As, 1:(Nf + activeCostraint));#TEST
+            # nc.posinterp[:] .= transpose(ns[:, 1:(Nf + activeCostraint)]) \ As[1:(Nf + activeCostraint)];#TEST
+            # nc.posinterp[:] .= ns[:, 1:(Nf + activeCostraint)] * ((transpose(ns[:, 1:(Nf + activeCostraint)]) * ns[:, 1:(Nf + activeCostraint)]) \ view(As, 1:(Nf + activeCostraint)));
+
+            a = ns[:, 1:(Nf + activeCostraint)]
+            d = view(As, 1:(Nf + activeCostraint))
+            A = transpose(a) * a
+            if rank(A) == minimum(size(A))
+                posinterp= a * (A \ d)
+            else
+                posinterp= 1000.0
+            end
+        end
+        #for c---------------------
+    else
+        posinterp[:] .= 1000.0;#put it outside the cube!
+    end
+    return posinterp
+end
 
 function _interpolate!(ncubes::Vector{NCube{IT,FT,N}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}})  where {fcT ,N ,Nf ,Nc ,t01T ,t11T ,IT ,FT,aT}
     for nc in ncubes
         FunTupleVector = getcornerval(nc, mdbm)
-        if Nc==0 || all(
-            any((c)->!isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
-            for fi in 1:length(FunTupleVector[1][2])
-            )# check the constraint: do wh have to compute at all?!?
-
-            As = zero(MVector{Nf + Nc,FT})
-            ns = zero(MMatrix{N,Nf + Nc,FT})
-
-            #for f---------------------
-            for kf = 1:Nf#length(FunTupleVector[1][1])
-                solloc = mdbm.T11pinv * [FunTupleVector[kcubecorner][1][kf] for kcubecorner = 1:length(FunTupleVector)]
-                As[kf] = solloc[end];
-                ns[:,kf] .= solloc[1:end - 1];
-            end
-
-            #for c---if needed: that is, it is close to the boundary--------
-            activeCostraint = 0;
-            for kf = 1:Nc#length(FunTupleVector[1][2])
-                #TODO: mivan a többszörös C teljesülése esetén!?!??!# ISSUE
-                if any((c)->!isless(zero(c[2][kf]), c[2][kf]), FunTupleVector) && length(As) < N  # use a constraint till it reduces the dimension to zero (point) and no further
-                    solloc = mdbm.T11pinv * [FunTupleVector[kcubecorner][2][kf] for kcubecorner = 1:length(FunTupleVector)]
-                    activeCostraint += 1;
-                    As[Nf + activeCostraint] = solloc[end];
-                    ns[:,Nf + activeCostraint] .= solloc[1:end - 1];
-                end
-            end
-
-            if (Nf + activeCostraint) == 0
-                nc.posinterp[:] .= zero(FT)
-            else
-                # first two leads to error in the fucntion of constant due to the behaviour of pinv (eg. [1 0;0 1;0 0]/[1 0; 0 0; 0 0])
-                # nc.posinterp[:] .= transpose(view(ns, :, 1:(Nf + activeCostraint))) \ view(As, 1:(Nf + activeCostraint));#TEST
-                # nc.posinterp[:] .= transpose(ns[:, 1:(Nf + activeCostraint)]) \ As[1:(Nf + activeCostraint)];#TEST
-                # nc.posinterp[:] .= ns[:, 1:(Nf + activeCostraint)] * ((transpose(ns[:, 1:(Nf + activeCostraint)]) * ns[:, 1:(Nf + activeCostraint)]) \ view(As, 1:(Nf + activeCostraint)));
-
-                a = ns[:, 1:(Nf + activeCostraint)]
-                d = view(As, 1:(Nf + activeCostraint))
-                A = transpose(a) * a
-                if rank(A) == minimum(size(A))
-                    nc.posinterp[:] .= a * (A \ d)
-                else
-                    nc.posinterp[:] .= 1000.0
-                end
-            end
-            #for c---------------------
-        else
-            nc.posinterp[:] .= 1000.0;#put it outside the cube!
-        end
+        nc.posinterp[:] .= fit_hyperplane(FunTupleVector,N,Nf,Nc,FT,mdbm.T11pinv)
     end
 
     #TODO: what if it falls outside of the n-cube, it should be removed ->what shall I do with the bracketing cubes?
     # Let the user define it
      # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.5 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
-    normp = 5.0
-    ncubetolerance = 0.7
+    normp = 20.0
+    ncubetolerance = 0.5
     filter!((nc)->norm(nc.posinterp, normp) < 1.0 + ncubetolerance, mdbm.ncubes)
      #filter!((nc)->!any(isnan.(nc.posinterp)),mdbm.ncubes)
 
     return nothing
 end
+
+
+function _interpolate_subcubes!(nc::NCube{IT,FT,N}, Nsub::Int,mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}})  where {fcT ,N ,Nf ,Nc ,t01T ,t11T ,IT ,FT,aT}
+
+    faces, face_fixed_dims = generate_faces_indices(3)
+    @warn "asdfasdf"
+error("asdgf")
+
+    T11pinv=MDBM.T11pinvmaker(Val(N-1))
+    for face in faces
+        FunTupleVector=MDBM.getcornerval([nc.corner .+ nc.size .* T for T in face], mymdbm)
+        posinterp= MDBM.fit_hyperplane(FunTupleVector,3-1,2,0,typeof(FunTupleVector[1][1][1]),T11pinv)
+    
+        #TODO: what if it falls outside of the n-cube, it should be removed ->what shall I do with the bracketing cubes?
+        # Let the user define it
+        # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.5 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
+    normp = 5.0
+    ncubetolerance = 0.7
+    @show posinterp
+    @show norm(posinterp, normp) < 1.0 + ncubetolerance
+
+     #filter!((nc)->!any(isnan.(nc.posinterp)),mdbm.ncubes)
+
+    
+    
+    end
+
+    #TODO: what if it falls outside of the n-cube, it should be removed ->what shall I do with the bracketing cubes?
+    # Let the user define it
+     # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.5 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
+    normp = 500.0
+    ncubetolerance = 0.17
+    filter!((nc)->norm(nc.posinterp, normp) < 1.0 + ncubetolerance, mdbm.ncubes)
+     #filter!((nc)->!any(isnan.(nc.posinterp)),mdbm.ncubes)
+
+    return nothing
+end
+
+
 
 function _interpolate!(ncubes::Vector{NCube{IT,FT,N}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{Ninterp}}) where {fcT, IT, FT, N, Ninterp, Nf, Nc, t01T, t11T, aT}
     error("order $(Ninterp) interpolation is not supperted (yet)")
@@ -295,6 +365,13 @@ function getinterpolatedsolution(nc::NCube{IT,FT,N}, mdbm::MDBM_Problem{fcT,N,Nf
         (typeof(mdbm.axes[i].ticks).parameters[1])((mdbm.axes[i].ticks[nc.corner[i]] * (1.0 - (nc.posinterp[i] + 1.0) / 2.0) +
         mdbm.axes[i].ticks[nc.corner[i] + 1] * ((nc.posinterp[i] + 1.0) / 2.0)))#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
 for i in 1:length(mdbm.axes)]
+end
+
+function getinterpolatedsolution(posinterp,corner, axes)
+    [
+        (typeof(axes[i].ticks).parameters[1])((axes[i].ticks[corner[i]] * (1.0 - (posinterp[i] + 1.0) / 2.0) +
+        axes[i].ticks[corner[i] + 1] * ((posinterp[i] + 1.0) / 2.0)))#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
+for i in 1:length(axes)]
 end
 
 """
