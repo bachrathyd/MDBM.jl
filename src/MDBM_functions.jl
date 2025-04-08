@@ -81,35 +81,37 @@ function T11pinvmaker(valk::Val{kdim}) where {kdim}
     SMatrix{kdim + 1,2^kdim}(T11pinv)
 end
 
-"""
-    generate_faces_indices(n)
 
-Generates the faces of an n-dimensional cube.
-
-# Arguments
-- `n::Int`: Dimension of the cube.
-
-# Returns
-- `faces`: Vector containing the faces, each face represented by a vector of corners.
-- `fixed_dims`: Vector containing tuples indicating the dimension and the side (0 or 1) fixed for each face.
-"""
-function generate_faces_indices(n)
-    corners = [SVector{n}(digits(i, base=2, pad=n) .== 1) for i in 0:(2^n-1)]
-    faces = Vector{Vector{SVector{n,Bool}}}(undef, 2 * n)
-    fixed_dims = Vector{Tuple{Int,Bool}}(undef, 2 * n)
-
-    idx = 1
-    for dim in 1:n
-        for side in [false, true]
-            face = filter(c -> c[dim] == side, corners)
-            faces[idx] = face
-            fixed_dims[idx] = (dim, side)
-            idx += 1
-        end
-    end
-
-    return faces, fixed_dims
-end
+# #TODO : deprecated - same results can be achieved with the generate_sub_faces function
+# """
+#     generate_faces_indices(n)
+# 
+# Generates the faces of an n-dimensional cube.
+# 
+# # Arguments
+# - `n::Int`: Dimension of the cube.
+# 
+# # Returns
+# - `faces`: Vector containing the faces, each face represented by a vector of corners.
+# - `fixed_dims`: Vector containing tuples indicating the dimension and the side (0 or 1) fixed for each face.
+# """
+# function generate_faces_indices(n)
+#     corners = [SVector{n}(digits(i, base=2, pad=n) .== 1) for i in 0:(2^n-1)]
+#     faces = Vector{Vector{SVector{n,Bool}}}(undef, 2 * n)
+#     fixed_dims = Vector{Tuple{Int,Bool}}(undef, 2 * n)
+# 
+#     idx = 1
+#     for dim in 1:n
+#         for side in [false, true]
+#             face = filter(c -> c[dim] == side, corners)
+#             faces[idx] = face
+#             fixed_dims[idx] = (dim, side)
+#             idx += 1
+#         end
+#     end
+# 
+#     return faces, fixed_dims
+# end
 
 """
     generate_sub_faces(face, fixed_dims)
@@ -146,9 +148,7 @@ function generate_sub_faces(face, fixed_dims::Vector{Tuple{Int,Bool}})
 end
 
 
-function interpsubcubesolution(faces, fixed_dims, corner, size,  mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT ,N ,Nf ,Nc ,t01T ,t11T ,IT ,FT,aT}
-    posall_tree = Any[]
-
+function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size,  mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT ,N ,Nf ,Nc ,t01T ,t11T ,IT ,FT,aT}
     for (face, fixdim) in zip(faces, fixed_dims)
         FunTupleVector = MDBM.getcornerval([corner .+ size .* T for T in face], mdbm)
 
@@ -169,19 +169,70 @@ function interpsubcubesolution(faces, fixed_dims, corner, size,  mdbm::MDBM_Prob
             #print("$Nfree ok:")
             #@show face
 
-            if Nfree >= Nf
+            push!(posall_tree.subpoints, PositionTree(getinterpolatedsolution(posinterp,corner, mdbm.axes)))
+            if Nfree > Nf
                 edges, all_edge_fixed_dims = generate_sub_faces(face, fixdim)
-                posall_tree_sub = interpsubcubesolution(edges, all_edge_fixed_dims, corner, size, mdbm)
-                push!(posall_tree, [getinterpolatedsolution(posinterp,corner, mdbm.axes), posall_tree_sub])
+                interpsubcubesolution!(posall_tree.subpoints[end],edges, all_edge_fixed_dims, corner, size, mdbm)
             end
-
-
         else
             #println("$Nfree x")
         end
     end
     return posall_tree
 end
+
+"""
+    extract_paths(tree::PositionTree{N,T})
+
+Extracts all root-to-leaf paths from a PositionTree.
+
+# Arguments
+- `tree::PositionTree{N,T}`: The root of the PositionTree.
+
+# Returns
+- An array of paths, each path being a vector of positions (as SVectors) from root to leaf.
+
+# Example
+```julia
+root = PositionTree([1.0, 2.0, 3.0])
+push!(root.subpoints, PositionTree([4.0, 5.0, 6.0]))
+push!(root.subpoints, PositionTree([7.0, 8.0, 9.0]))
+
+paths = extract_paths(root)
+```
+"""
+function extract_paths(tree::PositionTree{N,T}, current_path=Vector{SVector{N,T}}()) where {N,T}
+    #@show (N,T)
+    paths_loc = Vector{Vector{SVector{N,T}}}()
+
+    # Append current node's position to the path
+    #new_path = [current_path; SVector{N,T}(tree.p)]
+    new_path = deepcopy(current_path)
+    push!(new_path, tree.p)
+
+    # If the node is a leaf, return the accumulated path
+    if isempty(tree.subpoints)
+        push!(paths_loc, new_path)
+        #println("Leaf node added")
+    else
+        # Otherwise, recursively explore subpoints
+        
+        #println("--------~~~~~~~~~~~~~~~~--------------")
+        #println("Subtree length: ", length(tree.subpoints))
+        for subtree in tree.subpoints
+            #@show (subtree, new_path)
+            append!(paths_loc, extract_paths(subtree, new_path))
+        end
+    end
+
+    return paths_loc
+end
+
+
+
+
+
+
 
 function issingchange(FunTupleVector::AbstractVector, Nf::Integer, Nc::Integer)::Bool
     all([
@@ -280,45 +331,6 @@ function _interpolate!(ncubes::Vector{NCube{IT,FT,N}}, mdbm::MDBM_Problem{fcT,N,
 
     return nothing
 end
-
-
-function _interpolate_subcubes!(nc::NCube{IT,FT,N}, Nsub::Int,mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}})  where {fcT ,N ,Nf ,Nc ,t01T ,t11T ,IT ,FT,aT}
-
-    faces, face_fixed_dims = generate_faces_indices(3)
-    @warn "asdfasdf"
-    error("asdgf")
-
-    T11pinv=MDBM.T11pinvmaker(Val(N-1))
-    for face in faces
-        FunTupleVector=MDBM.getcornerval([nc.corner .+ nc.size .* T for T in face], mymdbm)
-        posinterp= MDBM.fit_hyperplane(FunTupleVector,3-1,2,0,typeof(FunTupleVector[1][1][1]),T11pinv)
-    
-        #TODO: what if it falls outside of the n-cube, it should be removed ->what shall I do with the bracketing cubes?
-        # Let the user define it
-        # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.5 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
-    normp = 5.0
-    ncubetolerance = 0.7
-    @show posinterp
-    @show norm(posinterp, normp) < 1.0 + ncubetolerance
-
-     #filter!((nc)->!any(isnan.(nc.posinterp)),mdbm.ncubes)
-
-    
-    
-    end
-
-    #TODO: what if it falls outside of the n-cube, it should be removed ->what shall I do with the bracketing cubes?
-    # Let the user define it
-     # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.5 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
-    normp = 500.0
-    ncubetolerance = 0.17
-    filter!((nc)->norm(nc.posinterp, normp) < 1.0 + ncubetolerance, mdbm.ncubes)
-     #filter!((nc)->!any(isnan.(nc.posinterp)),mdbm.ncubes)
-
-    return nothing
-end
-
-
 
 function _interpolate!(ncubes::Vector{NCube{IT,FT,N}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{Ninterp}}) where {fcT, IT, FT, N, Ninterp, Nf, Nc, t01T, t11T, aT}
     error("order $(Ninterp) interpolation is not supperted (yet)")
