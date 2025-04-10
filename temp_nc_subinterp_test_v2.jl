@@ -1,37 +1,18 @@
+5+5
+
+using GLMakie
+
+
 using StaticArrays
 using LinearAlgebra
 
 
-#
-#println("Original faces (3-cubes):")
-#for (i, face) in enumerate(faces)
-#    println("Face $(i), fixed dim: ", face_fixed_dims[i])
-#end
-#
-#println("\nSub-faces of first face (2-cubes):")
-#sub_faces, all_fixed_dims = generate_sub_faces(faces[1], all_fixed_dims[1])
-#for (i, sub_face) in enumerate(sub_faces)
-#    println("Sub-face $(i), all fixed dims: ", all_fixed_dims[i])
-#end
-#
-#println("\nEdges (1-cubes) from first sub-face:")
-#edges, all_edge_fixed_dims, = generate_sub_faces(sub_faces[1], all_fixed_dims[1])
-#for (i, edge) in enumerate(edges)
-#    println("Edge $(i), all fixed dims: ", all_edge_fixed_dims[i])
-#end
-#
 
-
-
-
-#fighanle = scatter()
-fighanle = scatter!()
-
-N = 4
+N = length(mymdbm.axes)
 T = Float64
 pathall = Vector{SVector{N,T}}()
 for nc in mymdbm.ncubes
-#nc= mymdbm.ncubes[45]
+    #nc= mymdbm.ncubes[5]
     nccorner = nc.corner
     ncsize = nc.size
 
@@ -42,23 +23,31 @@ for nc in mymdbm.ncubes
     posall_tree = MDBM.PositionTree(NaN * Vector{Float64}(undef, N))
     MDBM.interpsubcubesolution!(posall_tree, [nc_template], [fixed_dims], nccorner, ncsize, mymdbm)
     #    
-#    @show posall_tree
+    #    @show posall_tree
     path2points = MDBM.extract_paths(posall_tree)
 
-    #[plot!(collect(eachrow(reduce(hcat, pathloc)))...) for pathloc in path2points]
-    #plot!() 
-    
+    #plot each line element separately
+    #[plot!(collect(eachrow(reduce(hcat, pathloc)))...,lw=5) for pathloc in path2points]
+
+
+    pathall_ncube = Vector{SVector{N,T}}()
     #pathloc=path2points[1]
     for pathloc in path2points
-        if length(pathloc)>2
-        #append!(pathall, pathloc)
-        append!(pathall, vcat(pathloc, [pathloc[2]]))
+        if length(pathloc) > 2
+            append!(pathall, pathloc)
+            #append!(pathall_ncube, vcat(pathloc, [pathloc[2]])) #closed traingle for line plotting
         end
+
     end
 
+
+    # #plot each ncubes separately
+    # if length(pathall_ncube) > 1
+    #     plot!(collect(eachrow(reduce(hcat, pathall_ncube)))[1:3]..., lw=5)
+    # end
+    append!(pathall, pathall_ncube)
 end
 
+faces=(1:4:(length(pathall))) .+ collect(1:N)'
+mesh!(pathall,faces,alpha=1.0)
 
-plot(collect(eachrow(reduce(hcat, pathall)))[1:3]..., lw=5)
-plot!(collect(eachrow(reduce(hcat, pathall)))[1:2]..., lw=5)
-#scatter!(collect(eachrow(reduce(hcat, pathall)))..., ms=15, label="interpolated solution")

@@ -163,7 +163,7 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size,  m
         posinterp[free_dims] .= MDBM.fit_hyperplane(FunTupleVector, Nfree, Nf, Nc, typeof(FunTupleVector[1][1][1]), T11pinv)
 
         normp = 50000.0
-        ncubetolerance = 0.001
+        ncubetolerance = 0.02
 
         if norm(posinterp, normp) < 1.0 + ncubetolerance
             #print("$Nfree ok:")
