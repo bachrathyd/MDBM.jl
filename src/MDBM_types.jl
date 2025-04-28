@@ -58,7 +58,7 @@ end
 function Axis(a::AbstractVector{T}, name=:unknown) where {T}
     Axis(T, a, name)
 end
-function Axis(a, name=:unknown) where {T}
+function Axis(a, name=:unknown)
     Axis([a...], name)
 end
 function Axis(a::Axis)
@@ -96,20 +96,26 @@ PositionTree(p::AbstractArray{T}) where {T} = PositionTree(MVector{length(p),T}(
 
 
 
-struct NCube{IT,FT,N}
+struct NCube{IT,FT,N,Nfc}
     corner::MVector{N,IT} #"bottom-left" #Integer index of the axis
     size::MVector{N,IT}#Integer index of the axis
     posinterp::MVector{N,FT}#relative coordinate within the cube "(-1:1)" range
     bracketingncube::Bool
+    gradient ::MMatrix{N,Nfc,FT}
     # gradient ::MVector{MVector{T}}
     # curvnorm::Vector{T}
 end
 
 
-Base.isless(a::NCube{IT,FT,N}, b::NCube{IT,FT,N}) where {IT} where {FT} where {N} = Base.isless([a.corner, a.size], [b.corner, b.size])
-Base.isequal(a::NCube{IT,FT,N}, b::NCube{IT,FT,N}) where {IT} where {FT} where {N} = all([a.corner == b.corner, a.size == b.size])
+# Base.isless(a::NCube{IT,FT,N,Nf,Nc}, b::NCube{IT,FT,N,Nf,Nc}) where {IT,FT,N,Nf,Nc} = Base.isless([a.corner, a.size], [b.corner, b.size])
+# Base.isequal(a::NCube{IT,FT,N,Nf,Nc}, b::NCube{IT,FT,N,Nf,Nc}) where {IT,FT,N,Nf,Nc} = all([a.corner == b.corner, a.size == b.size])
+# import Base.==
+# ==(a::NCube{IT,FT,N,Nf,Nc}, b::NCube{IT,FT,N,Nf,Nc}) where {IT,FT,N,Nf,Nc} = all([a.corner == b.corner, a.size == b.size])
+
+Base.isless(a::NCube, b::NCube)  = Base.isless([a.corner, a.size], [b.corner, b.size])
+Base.isequal(a::NCube, b::NCube)  = all([a.corner == b.corner, a.size == b.size])
 import Base.==
-==(a::NCube{IT,FT,N}, b::NCube{IT,FT,N}) where {IT} where {FT} where {N} = all([a.corner == b.corner, a.size == b.size])
+==(a::NCube, b::NCube) = all([a.corner == b.corner, a.size == b.size])
 
 
 """
@@ -142,22 +148,26 @@ struct MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     "The vector of discretized parameters space"
     axes::Axes{N,aT}
     "the bracketing n-cubes (which contains a solution)"
-    ncubes::Vector{NCube{IT,FT,N}}
+    ncubes::Vector{<:NCube}#{IT,FT,N,Nfc}
     T01::t01T#
     T11pinv::t11T
 end
 
-function MDBM_Problem(fc::fcT, axes, ncubes::Vector{NCube{IT,FT,N}}, Nf, Nc) where {fcT<:Function} where {IT<:Integer} where {FT<:AbstractFloat} where {N}
+#{IT,FT,N,Nfc}
+function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc,IT=Int,FT=Float64) where {fcT<:Function}# where {IT<:Integer} where {FT<:AbstractFloat}
+    N=length(axes)
     T01 = T01maker(Val(N))
     T11pinv = T11pinvmaker(Val(N))
+    Nfc=Nf+Nc
     MDBM_Problem{fcT,N,Nf,Nc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
-        [NCube{IT,FT,N}(SVector{N,IT}([x...]), SVector{N,IT}(ones(IT, length(x))), SVector{N,FT}(zeros(IT, length(x))), true) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:], T01, T11pinv)
+        [NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))), 
+        MVector{N,FT}(zeros(IT, length(x))), true,MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:], T01, T11pinv)
 end
 
-function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,
-    #Nf=length(f(getindex.(axes0,1)...)),
+function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
     Nf=f(getindex.(axes0, 1)...) === nothing ? 0 : length(f(getindex.(axes0, 1)...)),
     Nc=constraint(getindex.(axes0, 1)...) === nothing ? 0 : length(constraint(getindex.(axes0, 1)...)))#Float16(1.), nothing
+    Nfc=Nf + Nc 
     axes = deepcopy.(axes0)
     argtypesofmyfunc = map(x -> typeof(x).parameters[1], axes)#Argument Type
     AT = Tuple{argtypesofmyfunc...}
@@ -181,11 +191,10 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
         fun = (x) -> (f(x...), constraint(x...))
     end
     Ndim = length(axes)
-    MDBM_Problem(fun, axes, Vector{NCube{Int64,Float64,Ndim}}(undef, 0), Nf, Nc)
+    MDBM_Problem(fun, axes, Vector{NCube{Int64,Float64,Ndim, Nfc}}(undef, 0), Nf, Nc)
 end
 
-function MDBM_Problem(f::Function, a::AbstractVector{<:AbstractVector}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,
-    #Nf=length(f(getindex.(axes0,1)...)),
+function MDBM_Problem(f::Function, a::AbstractVector{<:AbstractVector}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
     Nf=f(getindex.(a, 1)...) === nothing ? 0 : length(f(getindex.(a, 1)...)),
     Nc=constraint(getindex.(a, 1)...) === nothing ? 0 : length(constraint(getindex.(a, 1)...)))
     axes = [Axis(ax) for ax in a]
