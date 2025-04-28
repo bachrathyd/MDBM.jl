@@ -30,6 +30,7 @@ solve!(mymdbm, 1)
 
 
 
+
 #interpolate!(mymdbm,interpolationorder=0)
 interpolate!(mymdbm, interpolationorder=1)
 
@@ -55,7 +56,16 @@ lines!(edge2plot_xyz...)
 
 
 
+
+
+
+
+
+#-----------------------------
 f = Figure()
+
+GLMakie.Axis(f[1, 1])
+
 
 function foo2(x, y)
 
@@ -63,15 +73,16 @@ function foo2(x, y)
         println("x,y=$x, $y")
         return 0001.0001
     else
-        (x^2.0 + y^2.0 - 2.0^2.0)^1.0
+        #(x^-1.0 + y^-1.0 - 2.0^2.0)^1.0
+        -(-x^2.0 + y^1.0 - 0.0*2.0^2.0)^1.0
+        #(x^2.0 + y^2.0 - 2.0^2.0)^1.0
     end
 end
-mymdbm = MDBM_Problem(foo2, [[0.0, 3.0], [0.0, 3.0]])
-solve!(mymdbm, 0)
+mymdbm = MDBM_Problem(foo2, [[0.101021010, 3.0], 0.0015205: 3.0])
+solve!(mymdbm, 5)
 
 #mymdbm=MDBM_Problem(foo2,[-5:5,-3:3])
 #solve!(mymdbm,2)
-
 
 
 #interpolate!(mymdbm,interpolationorder=0)
@@ -83,12 +94,33 @@ scatter!(xyz_sol...)
 
 xyz_val = getevaluatedpoints(mymdbm)
 scatter!(xyz_val...)
+
 getevaluatedfunctionvalues(mymdbm)
 
 
-fi = LinRange(0, 2pi, 5000)
-plot!(2 .* sin.(fi), 2 .* cos.(fi))
-#plot!(xticks =mymdbm.axes[1].ticks,yticks =mymdbm.axes[2].ticks)
+
+
+
+xyz_sol = getinterpolatedsolution(mymdbm) 
+gxyz=getinterpolatedgradient(mymdbm.ncubes,mymdbm)
+
+
+arrows!(xyz_sol..., gxyz[1]..., arrowsize = 10, lengthscale = 0.3)#    arrowcolor = strength, linecolor = strength)
+
+
+
+
+
+
+
+
+
+
+
+
+ fi = LinRange(0, 2pi, 5000)
+ lines!(2 .* sin.(fi), 2 .* cos.(fi))
+# #lines!(xticks =mymdbm.axes[1].ticks,yticks =mymdbm.axes[2].ticks)
 
 
 DT1 = connect(mymdbm)
