@@ -11,8 +11,13 @@ using LinearAlgebra
 N = length(mymdbm.axes)
 T = Float64
 pathall = Vector{SVector{N,T}}()
-for nc in mymdbm.ncubes
-    #nc= mymdbm.ncubes[5]
+
+#for nc in mymdbm.ncubes
+    k=0
+    k=k+1
+    nc= mymdbm.ncubes[k]
+
+
     nccorner = nc.corner
     ncsize = nc.size
 
@@ -25,7 +30,22 @@ for nc in mymdbm.ncubes
     #    
     #    @show posall_tree
     path2points = MDBM.extract_paths(posall_tree)
+    
 
+
+
+    #f = Figure()
+    puniq=unique(collect(Iterators.flatten(path2points)))[2:end]
+
+@show    result = linear_fit_quality(puniq)
+    
+
+#scatter!(getindex.(puniq,1),getindex.(puniq,2),getindex.(puniq,3))
+scatter!(getindex.(puniq,1),getindex.(puniq,2))
+
+
+
+    p in path2points
     #plot each line element separately
     #[plot!(collect(eachrow(reduce(hcat, pathloc)))...,lw=5) for pathloc in path2points]
 
@@ -46,7 +66,7 @@ for nc in mymdbm.ncubes
     #     plot!(collect(eachrow(reduce(hcat, pathall_ncube)))[1:3]..., lw=5)
     # end
     append!(pathall, pathall_ncube)
-end
+#end
 
 faces=(1:4:(length(pathall))) .+ collect(1:N)'
 mesh!(pathall,faces,alpha=1.0)

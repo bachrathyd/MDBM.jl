@@ -1,4 +1,4 @@
-5+5
+5 + 5
 using Revise
 using MDBM
 
@@ -14,33 +14,33 @@ f = Figure()
 
 #Solution of an uncertain implicit equation
 
-function foo4(x,y,z,r)
-    x^2.0+y^2.0+z-r^2.0,z-y#,x-sin(z)#
+function foo4(x, y, z, r)
+    x^2.0 + y^2.0 + z - r^2.0, z - y#,x-sin(z)#
 end
-function foo3(x,y,z)
-    x^2.0+y^2.0+z-2.0^2.0#,x-sin(z)#,z-y#
+function foo3(x, y, z)
+    x^2.0 + y^2.0 + z - 2.0^2.0, x - sin(z)#,z-y#
 end
-function foo2(x,y)
-    x^2.0+y^2.0-2.0^2.0
+function foo2(x, y)
+    x^2.0 + y^2.0 - 2.0^2.0
 end
 
-mymdbm=MDBM_Problem(foo3,[-3.0:3.0,-3.0:3.0,-3.0:3.0])
-mymdbm=MDBM_Problem(foo2,[-3.0:3.0,-3.0:3.0])
-solve!(mymdbm,2)
+mymdbm = MDBM_Problem(foo3, [-3.0:3.0, -3.0:3.0, -3.0:3.0])
+# mymdbm=MDBM_Problem(foo2,[-3.0:3.0,-3.0:3.0])
+solve!(mymdbm, 1)
 
 
 
 #interpolate!(mymdbm,interpolationorder=0)
-interpolate!(mymdbm,interpolationorder=1)
+interpolate!(mymdbm, interpolationorder=1)
 
-xyz_sol=getinterpolatedsolution(mymdbm)
+xyz_sol = getinterpolatedsolution(mymdbm)
 scatter(xyz_sol...)
 
 #plot!(xticks =mymdbm.axes[1].ticks,yticks =mymdbm.axes[2].ticks)
 
 
-DT1=connect(mymdbm)
-edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1,1)], i_sol[getindex.(DT1,2)],fill(NaN,length(DT1))])'[:] for i_sol in xyz_sol]
+DT1 = connect(mymdbm)
+edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)], fill(NaN, length(DT1))])'[:] for i_sol in xyz_sol]
 
 lines!(edge2plot_xyz...)
 #for edges in DT1
@@ -49,3 +49,50 @@ lines!(edge2plot_xyz...)
 #    y_sol[[edges...]],
 #    z_sol[[edges...]])
 #end
+
+
+
+
+
+
+f = Figure()
+
+function foo2(x, y)
+
+    if all([x == 3.0, y == 3.0])
+        println("x,y=$x, $y")
+        return 0001.0001
+    else
+        (x^2.0 + y^2.0 - 2.0^2.0)^1.0
+    end
+end
+mymdbm = MDBM_Problem(foo2, [[0.0, 3.0], [0.0, 3.0]])
+solve!(mymdbm, 0)
+
+#mymdbm=MDBM_Problem(foo2,[-5:5,-3:3])
+#solve!(mymdbm,2)
+
+
+
+#interpolate!(mymdbm,interpolationorder=0)
+interpolate!(mymdbm, interpolationorder=1)
+
+xyz_sol = getinterpolatedsolution(mymdbm)
+ #scatter(xyz_sol...)
+scatter!(xyz_sol...)
+
+xyz_val = getevaluatedpoints(mymdbm)
+scatter!(xyz_val...)
+getevaluatedfunctionvalues(mymdbm)
+
+
+fi = LinRange(0, 2pi, 5000)
+plot!(2 .* sin.(fi), 2 .* cos.(fi))
+#plot!(xticks =mymdbm.axes[1].ticks,yticks =mymdbm.axes[2].ticks)
+
+
+DT1 = connect(mymdbm)
+edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)], fill(NaN, length(DT1))])'[:] for i_sol in xyz_sol]
+
+lines!(edge2plot_xyz...)
+#for edges in DT1
