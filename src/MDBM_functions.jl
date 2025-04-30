@@ -148,6 +148,8 @@ function generate_sub_faces(face, fixed_dims::Vector{Tuple{Int,Bool}})
 end
 
 
+
+
 function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     for (face, fixdim) in zip(faces, fixed_dims)
         FunTupleVector = MDBM.getcornerval([corner .+ size .* T for T in face], mdbm)
@@ -164,13 +166,14 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, md
         posinterp[free_dims] .= p
 
         normp = 50000.0
-        ncubetolerance = 0.02
+        ncubetolerance = 0.2
 
         if norm(posinterp, normp) < 1.0 + ncubetolerance
             #print("$Nfree ok:")
             #@show face
 
-            push!(posall_tree.subpoints, PositionTree(getinterpolatedsolution(posinterp, corner, mdbm.axes)))
+            #push!(posall_tree.subpoints, PositionTree(getinterpolatedsolution(posinterp, corner, mdbm.axes)))
+            push!(posall_tree.subpoints, PositionTree(posinterp))
             if Nfree > Nf
                 edges, all_edge_fixed_dims = generate_sub_faces(face, fixdim)
                 interpsubcubesolution!(posall_tree.subpoints[end], edges, all_edge_fixed_dims, corner, size, mdbm)
@@ -262,7 +265,8 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     return nothing
 end
 function fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, T11pinv)
-    posinterp = zeros(Float64, 3)
+    posinterp = zeros(FT, N)
+    grad = zeros(FT, N, Nf + Nc)
     if Nc == 0 || all(
         any((c) -> !isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
         for fi in 1:length(FunTupleVector[1][2])
@@ -467,22 +471,22 @@ end
 
 
 function getinterpolatedgradient(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
-  println("getinterpolatedgradient")
-    [ [
+    #println("getinterpolatedgradient")
+    [[
         [
-              nc.gradient[i, fi]  / ( (mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] - 
-             mdbm.axes[i].ticks[nc.corner[i]] ) / 2.0)
+            nc.gradient[i, fi] / ((mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] -
+                                   mdbm.axes[i].ticks[nc.corner[i]]) / 2.0)
             for nc in ncubes]#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
         for i in 1:length(mdbm.axes)] for fi in 1:size(ncubes[1].gradient, 2)]
 end
 
 
 function getinterpolatedgradient(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
-    [ [
-                 (mdbm.axes[i].ticks[nc.corner[i]] * (1.0 .- (nc.gradient[i, fi] .+ 1.0) ./ 2.0) +
-                  mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] * ((nc.gradient[i, fi] .+ 1.0) ./ 2.0))
-         for i in 1:length(mdbm.axes)] for fi in 1:size(nc.gradient, 2)]
- end
+    [[
+        (mdbm.axes[i].ticks[nc.corner[i]] * (1.0 .- (nc.gradient[i, fi] .+ 1.0) ./ 2.0) +
+         mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] * ((nc.gradient[i, fi] .+ 1.0) ./ 2.0))
+        for i in 1:length(mdbm.axes)] for fi in 1:size(nc.gradient, 2)]
+end
 
 """
     getevaluatedpoints(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
