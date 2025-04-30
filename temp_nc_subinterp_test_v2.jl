@@ -6,7 +6,7 @@ using GLMakie
 using StaticArrays
 using LinearAlgebra
 
-
+begin
 
 N = length(mymdbm.axes)
 T = Float64
@@ -56,11 +56,11 @@ for nc in mymdbm.ncubes
 
     #    arrowcolor = strength, linecolor = strength)
 
-    if N == 3
-        scatter!(getindex.(puniq, 1), getindex.(puniq, 2), getindex.(puniq, 3))
-    else
-        scatter!(getindex.(puniq, 1), getindex.(puniq, 2))
-    end
+  #  if N == 3
+  #      scatter!(getindex.(puniq, 1), getindex.(puniq, 2), getindex.(puniq, 3))
+  #  else
+  #      scatter!(getindex.(puniq, 1), getindex.(puniq, 2))
+  #  end
 
 
     #plot each line element separately
@@ -87,9 +87,10 @@ for nc in mymdbm.ncubes
     #append!(pathall, pathall_ncube)
 end
 
-
-#faces = (1:4:(length(pathall))) .+ collect(1:N)'
-#mesh!(pathall, faces, alpha=1.0)
+end
+f = Figure()
+faces = (1:4:(length(pathall))) .+ collect(1:N)'
+mesh(pathall, faces, alpha=1.0)
 
 
 if N == 3
@@ -100,7 +101,9 @@ end
 #plot(getindex.(pathall,1),getindex.(pathall,2),getindex.(pathall,3),lw=5)
 
 
-Colorbar(f[1, 2], limits=(log(minimum(error_all)), log(maximum(error_all))), colormap=:viridis,
-    flipaxis=false)
+Colorbar(f[1, 2], limits=(log(minimum(error_all)), log(maximum(error_all))), colormap=:viridis,    flipaxis=false)
 
 f
+
+lines(getindex.(pathall, 1), getindex.(pathall, 2), getindex.(pathall, 3), color=log.(error_all), linewidth=3)
+
