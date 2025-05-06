@@ -149,6 +149,30 @@ end
 
 
 
+function interpsubcubesolution!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    for nc in mdbm.ncubes
+        interpsubcubesolution!(nc, mdbm)
+    end
+    return nothing
+end
+function interpsubcubesolution!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    for nc in ncubes
+        interpsubcubesolution!(nc, mdbm)
+    end
+    return nothing
+end
+
+function interpsubcubesolution!(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+
+    fixed_dims = Vector{Tuple{Int,Bool}}(undef, 0)
+    nc_template = mdbm.T01
+
+   # posall_tree = MDBM.PositionTree(nc.posinterp)
+    edges, all_edge_fixed_dims = MDBM.generate_sub_faces(nc_template, fixed_dims)
+
+    MDBM.interpsubcubesolution!(nc.posinterp, edges, all_edge_fixed_dims, nc.corner, nc.size, mdbm)
+
+end
 
 function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     for (face, fixdim) in zip(faces, fixed_dims)
@@ -168,7 +192,7 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, md
         normp = 50000.0
         ncubetolerance = 0.2
 
-        if norm(posinterp, normp) < 1.0 + ncubetolerance
+        if  norm(posinterp, normp) < 1.0 + ncubetolerance
             #print("$Nfree ok:")
             #@show face
 
@@ -182,8 +206,23 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, md
             #println("$Nfree x")
         end
     end
-    return posall_tree
+    return nothing
+    # return posall_tree
 end
+
+
+function extract_paths_local(nc::NCube)
+    extract_paths(nc.posinterp)
+end
+function extract_paths(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+        [getinterpolatedsolution.(posloc, Ref(nc.corner), Ref(mdbm.axes)) for posloc in extract_paths_local(nc)]
+end
+
+function extract_paths(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    extract_paths.(mdbm.ncubes, Ref(mdbm))
+end
+
+
 
 """
     extract_paths(tree::PositionTree{N,T})
@@ -260,7 +299,7 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     deleteat!(ncubes, .!isbracketing)#removeing the non-bracketing ncubes
 
     for nc in ncubes
-        nc.posinterp[:] .= zero(FT)
+        nc.posinterp.p[:] .= zero(FT)
     end
     return nothing
 end
@@ -286,7 +325,7 @@ function fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, T11pinv)
         activeCostraint = 0
         for kf = 1:Nc#length(FunTupleVector[1][2])
             #TODO: mivan a többszörös C teljesülése esetén!?!??!# ISSUE
-            if any((c) -> !isless(zero(c[2][kf]), c[2][kf]), FunTupleVector) && length(As) < N  # use a constraint till it reduces the dimension to zero (point) and no further
+            if any((c) -> !isless(zero(c[2][kf]), c[2][kf]), FunTupleVector) && length(As) <= N  # use a constraint till it reduces the dimension to zero (point) and no further
                 solloc = T11pinv * [FunTupleVector[kcubecorner][2][kf] for kcubecorner = 1:length(FunTupleVector)]
                 activeCostraint += 1
                 As[Nf+activeCostraint] = solloc[end]
@@ -325,7 +364,7 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     for nc in ncubes
         FunTupleVector = getcornerval(nc, mdbm)
         p, g = fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, mdbm.T11pinv)
-        nc.posinterp[:] .= p
+        nc.posinterp.p[:] .= p
         nc.gradient[:] .= g[:]
     end
 
@@ -334,8 +373,8 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.5 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
     normp = 20.0
     ncubetolerance = 0.5
-    filter!((nc) -> norm(nc.posinterp, normp) < 1.0 + ncubetolerance, mdbm.ncubes)
-    #filter!((nc)->!any(isnan.(nc.posinterp)),mdbm.ncubes)
+    filter!((nc) -> norm(nc.posinterp.p, normp) < 1.0 + ncubetolerance, mdbm.ncubes)
+    #filter!((nc)->!any(isnan.(nc.posinterp.p)),mdbm.ncubes)
 
     return nothing
 end
@@ -442,8 +481,8 @@ function getinterpolatedsolution(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT
     [
         [
             (typeof(mdbm.axes[i].ticks).parameters[1])(
-                (mdbm.axes[i].ticks[nc.corner[i]] * (1.0 - (nc.posinterp[i] + 1.0) / 2.0) +
-                 mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] * ((nc.posinterp[i] + 1.0) / 2.0))
+                (mdbm.axes[i].ticks[nc.corner[i]] * (1.0 - (nc.posinterp.p[i] + 1.0) / 2.0) +
+                 mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] * ((nc.posinterp.p[i] + 1.0) / 2.0))
             )
             for nc in ncubes]#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
         for i in 1:length(mdbm.axes)]
@@ -457,8 +496,8 @@ Provide the interpolated coordinates of the solution inside the provided n-cube 
 function getinterpolatedsolution(nc::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT,Nfc}
     [
         (typeof(mdbm.axes[i].ticks).parameters[1])(
-            (mdbm.axes[i].ticks[nc.corner[i]] * (1.0 - (nc.posinterp[i] + 1.0) / 2.0) +
-             mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] * ((nc.posinterp[i] + 1.0) / 2.0)))#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
+            (mdbm.axes[i].ticks[nc.corner[i]] * (1.0 - (nc.posinterp.p[i] + 1.0) / 2.0) +
+             mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] * ((nc.posinterp.p[i] + 1.0) / 2.0)))#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
         for i in 1:length(mdbm.axes)]
 end
 
@@ -590,8 +629,9 @@ function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; int
         while !isempty(ncubes2check) && (maxiteration == 0 ? true : numberofiteration < maxiteration)
             numberofiteration += 1
             ncubes2check = generateneighbours(ncubes2check, mdbm)
-
             deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, mdbm.ncubes))#delete the ones which is already presented
+            #@time fast_diff_sorted!(ncubes2check, mdbm.ncubes)#delete the ones which is already presented
+
 
             _interpolate!(ncubes2check, mdbm, Val{interpolationorder})#remove the non-bracketing, only proper new bracketing cubes remained
 
@@ -703,8 +743,8 @@ function is_sorted_in_sorted(a::AbstractVector, b::AbstractVector)::Array{Bool,1
     iscontained = falses(length(a))
     startindex = 1
     for ind2check in 1:length(a)
-        detectedrange = searchsorted(b[startindex:end], a[ind2check])
-        etectedrange = searchsorted(view(b, startindex:length(b)), a[ind2check]) # still: it is the critical line!!!
+        # detectedrange = searchsorted(b[startindex:end], a[ind2check])
+        detectedrange = searchsorted(view(b, startindex:length(b)), a[ind2check]) # still: it is the critical line!!!
         iscontained[ind2check] = !isempty(detectedrange)
         startindex = max(detectedrange.stop, detectedrange.start) + startindex - 1
         if startindex > length(b)
@@ -713,3 +753,25 @@ function is_sorted_in_sorted(a::AbstractVector, b::AbstractVector)::Array{Bool,1
     end
     return iscontained
 end
+
+#TODO: make it faster
+#function fast_diff_sorted!(A::Vector{T}, B::Vector{T}) where T
+#    i = j = 1
+#    result = T[]
+#
+#    while i <= length(A) && j <= length(B)
+#        if A[i] < B[j]
+#            push!(result, A[i])
+#            i += 1
+#        elseif A[i] > B[j]
+#            j += 1
+#        else  # A[i] == B[j]
+#            i += 1
+#            j += 1
+#        end
+#    end
+#
+#    # Add remaining elements of A
+#    append!(result, A[i:end])
+#    return result
+#end

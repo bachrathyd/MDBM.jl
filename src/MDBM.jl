@@ -48,7 +48,8 @@ using LinearAlgebra
 export MDBM_Problem, Axis,
  solve!, interpolate!, refine!, checkneighbour!,
   axesextend!, getinterpolatedsolution, getevaluatedpoints, getevaluatedfunctionvalues, getevaluatedconstraintvalues,
- connect, triangulation,getinterpolatedgradient
+ connect, triangulation,getinterpolatedgradient,
+ interpsubcubesolution!,extract_paths
 
 include("MDBM_types.jl")
 include("MDBM_functions.jl")
