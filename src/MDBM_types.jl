@@ -84,9 +84,9 @@ Base.length(::Axes{N,aT}) where {N,aT} = N
 
 
 
-struct PositionTree{N,T}
-    p::SVector{N,T}
-    subpoints::Vector{PositionTree{N,T}}
+struct PositionTree{N,FT}
+    p::MVector{N,FT}
+    subpoints::Vector{PositionTree{N,FT}}
 end
 # Constructor for a single position (empty subpoints)
 PositionTree(p::MVector{N,T}) where {N,T} = PositionTree{N,T}(p, PositionTree{N,T}[])
@@ -99,7 +99,7 @@ PositionTree(p::AbstractArray{T}) where {T} = PositionTree(MVector{length(p),T}(
 struct NCube{IT,FT,N,Nfc}
     corner::MVector{N,IT} #"bottom-left" #Integer index of the axis
     size::MVector{N,IT}#Integer index of the axis
-    posinterp::MVector{N,FT}#relative coordinate within the cube "(-1:1)" range
+    posinterp::PositionTree{N,FT}#relative coordinate within the cube "(-1:1)" range
     bracketingncube::Bool
     gradient ::MMatrix{N,Nfc,FT}#relative coordinate within the cube "(-1:1)" range
     #gradient ::MVector{Nfc,MVector{N,FT}}
@@ -161,7 +161,7 @@ function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc,IT=Int,FT=F
     Nfc=Nf+Nc
     MDBM_Problem{fcT,N,Nf,Nc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
         [NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))), 
-        MVector{N,FT}(zeros(IT, length(x))), true,MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:], T01, T11pinv)
+        PositionTree(zeros(FT, length(x))), true,MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:], T01, T11pinv)
 end
 
 function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
