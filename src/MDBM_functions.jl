@@ -149,32 +149,34 @@ end
 
 
 
-function interpsubcubesolution!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function interpsubcubesolution!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+
+    println([normp, ncubetolerance])
     for nc in mdbm.ncubes
-        interpsubcubesolution!(nc, mdbm)
+        interpsubcubesolution!(nc, mdbm, normp=normp, ncubetolerance=ncubetolerance)
     end
     return nothing
 end
-function interpsubcubesolution!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function interpsubcubesolution!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     for nc in ncubes
-        interpsubcubesolution!(nc, mdbm)
+        interpsubcubesolution!(nc, mdbm, normp=normp, ncubetolerance=ncubetolerance)
     end
     return nothing
 end
 
-function interpsubcubesolution!(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function interpsubcubesolution!(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
 
     fixed_dims = Vector{Tuple{Int,Bool}}(undef, 0)
     nc_template = mdbm.T01
 
-   # posall_tree = MDBM.PositionTree(nc.posinterp)
+    # posall_tree = MDBM.PositionTree(nc.posinterp)
     edges, all_edge_fixed_dims = MDBM.generate_sub_faces(nc_template, fixed_dims)
 
-    MDBM.interpsubcubesolution!(nc.posinterp, edges, all_edge_fixed_dims, nc.corner, nc.size, mdbm)
+    MDBM.interpsubcubesolution!(nc.posinterp, edges, all_edge_fixed_dims, nc.corner, nc.size, mdbm, normp=normp, ncubetolerance=ncubetolerance)
 
 end
 
-function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     for (face, fixdim) in zip(faces, fixed_dims)
         FunTupleVector = MDBM.getcornerval([corner .+ size .* T for T in face], mdbm)
 
@@ -189,10 +191,10 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, md
         p, g = MDBM.fit_hyperplane(FunTupleVector, Nfree, Nf, Nc, typeof(FunTupleVector[1][1][1]), T11pinv)
         posinterp[free_dims] .= p
 
-        normp = 50000.0
-        ncubetolerance = 0.2
+        #normp = 50000.0
+        #ncubetolerance = 0.2
 
-        if  norm(posinterp, normp) < 1.0 + ncubetolerance
+        if norm(posinterp, normp) < 1.0 + ncubetolerance
             #print("$Nfree ok:")
             #@show face
 
@@ -200,7 +202,7 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, md
             push!(posall_tree.subpoints, PositionTree(posinterp))
             if Nfree > Nf
                 edges, all_edge_fixed_dims = generate_sub_faces(face, fixdim)
-                interpsubcubesolution!(posall_tree.subpoints[end], edges, all_edge_fixed_dims, corner, size, mdbm)
+                interpsubcubesolution!(posall_tree.subpoints[end], edges, all_edge_fixed_dims, corner, size, mdbm, normp=normp, ncubetolerance=ncubetolerance)
             end
         else
             #println("$Nfree x")
@@ -215,7 +217,7 @@ function extract_paths_local(nc::NCube)
     extract_paths(nc.posinterp)
 end
 function extract_paths(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
-        [getinterpolatedsolution.(posloc, Ref(nc.corner), Ref(mdbm.axes)) for posloc in extract_paths_local(nc)]
+    [getinterpolatedsolution.(posloc, Ref(nc.corner), Ref(mdbm.axes)) for posloc in extract_paths_local(nc)]
 end
 
 function extract_paths(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
@@ -245,7 +247,6 @@ paths = extract_paths(root)
 ```
 """
 function extract_paths(tree::PositionTree{N,T}, current_path=Vector{SVector{N,T}}()) where {N,T}
-    #@show (N,T)
     paths_loc = Vector{Vector{SVector{N,T}}}()
 
     # Append current node's position to the path
@@ -294,7 +295,7 @@ function issingchange(FunTupleVector::AbstractVector, Nf::Integer, Nc::Integer):
     ])#check for all condition
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{0}}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{0}}, normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     isbracketing = map(nc -> issingchange(getcornerval(nc, mdbm), Nf, Nc), ncubes) #TODO: parallelize
     deleteat!(ncubes, .!isbracketing)#removeing the non-bracketing ncubes
 
@@ -303,6 +304,7 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     end
     return nothing
 end
+
 function fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, T11pinv)
     posinterp = zeros(FT, N)
     grad = zeros(FT, N, Nf + Nc)
@@ -360,7 +362,7 @@ function fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, T11pinv)
     return posinterp, grad
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     for nc in ncubes
         FunTupleVector = getcornerval(nc, mdbm)
         p, g = fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, mdbm.T11pinv)
@@ -371,15 +373,15 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     #TODO: what if it falls outside of the n-cube, it should be removed ->what shall I do with the bracketing cubes?
     # Let the user define it
     # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.5 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
-    normp = 20.0
-    ncubetolerance = 0.5
+
+
     filter!((nc) -> norm(nc.posinterp.p, normp) < 1.0 + ncubetolerance, mdbm.ncubes)
     #filter!((nc)->!any(isnan.(nc.posinterp.p)),mdbm.ncubes)
 
     return nothing
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{Ninterp}}) where {fcT,IT,FT,N,Ninterp,Nf,Nc,t01T,t11T,aT}
+function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{Ninterp}}; normp=20.0, ncubetolerance=0.5) where {fcT,IT,FT,N,Ninterp,Nf,Nc,t01T,t11T,aT}
     error("order $(Ninterp) interpolation is not supperted (yet)")
 end
 
@@ -390,8 +392,8 @@ Interpolate the solution within the n-cube with order `interpolationorder`.
  - `interpolationorder=0` provide the midpoint of the n-cube
  - `interpolationorder=1` preform a linear fit and provide closest solution point to the mindpoint of the n-cube
 """
-function interpolate!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
-    _interpolate!(mdbm.ncubes, mdbm, Val{interpolationorder})
+function interpolate!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    _interpolate!(mdbm.ncubes, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance)
 end
 
 
@@ -537,10 +539,10 @@ function getevaluatedpoints(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) 
 end
 
 """
-    getevaluatedpoints(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
+    getevaluatedfunctionvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
 
 Provide the functionvalues for all the coordinates where the function is evaluated.
-(see: `getevaluatedpoints`)
+(see: `getevaluatedfunctionvalues`)
 """
 function getevaluatedfunctionvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     [x.funval for x in mdbm.fc.fvalarg]
@@ -550,7 +552,7 @@ end
     getevaluatedconstraintvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
 
 Provide the constraints values for all the coordinates where the function is evaluated.
-(see: `getevaluatedpoints`)
+(see: `getevaluatedconstraintvalues`)
 """
 function getevaluatedconstraintvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     [x.cval for x in mdbm.fc.fvalarg]
@@ -619,7 +621,7 @@ It works only if the dimension of the solution object is larger the zero (the ma
     - `interpolationorder::Int=0`: interpolation order method of the neighbours checked
     - `maxiteration::Int=0~: the max number of steps in the 'continuation-like' exploring. If zero, then infinity steps are allowed
 """
-function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}#only for unite size cubes
+function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}#only for unite size cubes
 
     if isempty(mdbm.ncubes)
         println("There is no bracketing n-cubes to check!")
@@ -633,7 +635,7 @@ function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; int
             #@time fast_diff_sorted!(ncubes2check, mdbm.ncubes)#delete the ones which is already presented
 
 
-            _interpolate!(ncubes2check, mdbm, Val{interpolationorder})#remove the non-bracketing, only proper new bracketing cubes remained
+            _interpolate!(ncubes2check, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance) #remove the non-bracketing, only proper new bracketing cubes remained
 
             append!(mdbm.ncubes, deepcopy(ncubes2check))
             sort!(mdbm.ncubes; alg=QuickSort)
@@ -710,14 +712,14 @@ Refine the `MDBM_Problem` `iteration` times, then perform a neighbour check.
 julia> solve!(mymdbm,4)
 ```
 """
-function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
-    interpolate!(mdbm, interpolationorder=interpolationorder)
+function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance)
     for k = 1:iteration
         refine!(mdbm)
-        interpolate!(mdbm, interpolationorder=interpolationorder)
+        interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance)
     end
-    checkneighbour!(mdbm, interpolationorder=interpolationorder)
-    interpolate!(mdbm)
+    checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance)
+    interpolate!(mdbm, normp=normp, ncubetolerance=ncubetolerance)
     return mdbm
 end
 

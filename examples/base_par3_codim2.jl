@@ -1,5 +1,8 @@
 using MDBM
 using GLMakie
+
+GLMakie.closeall()
+GLMakie.activate!(;title = "3 parameters, codimension 2")
 #-----------------------------
 
 function foo_par3_codim2(x, y,z)
@@ -8,13 +11,12 @@ end
 mymdbm = MDBM_Problem(foo_par3_codim2, [-3.0:3.0, -3.0:3.0, -3.0:3.0])
 @time solve!(mymdbm, 2)#number of refinements - increase it slightly to see smoother results 
 
-
-f = Figure(resolution = (1000, 600))
-
+f = Figure(size = (1000, 600))
+ax1=GLMakie.Axis3(f[1, 1])
 # n-cube interpolation
-interpolate!(mymdbm, interpolationorder=1) 
 xyz_sol = getinterpolatedsolution(mymdbm)
-scatter(f[1, 1],xyz_sol..., markersize = 6, color = :red)
+scatter!(ax1,xyz_sol..., markersize = 6, color = :red,marker ='x',strokewidth=3,label = "solution")
+
 
 # show the points where the function is evaluated
 xyz_val = getevaluatedpoints(mymdbm)
@@ -24,13 +26,13 @@ colors = map(f -> RGBf(
     sign(f[2])/2 + 0.5,
     0.5
 ), fval);
-scatter!(xyz_val...,color=colors, markersize = 3)
+scatter!(xyz_val...,color=colors, markersize = 3,label = "evaluated")
 
 
 # connecting and plotting the "mindpoints" of the n-cubes
 DT1 = connect(mymdbm)
 edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)], fill(NaN, length(DT1))])'[:] for i_sol in xyz_sol]
-lines!(edge2plot_xyz..., linewidth=5)
+lines!(edge2plot_xyz..., linewidth=5,label = "midpoints solution connected")
 
 #TODO: uncomment for the gradinets
  #plotting the gradintes
@@ -40,9 +42,8 @@ arrows!(xyz_sol..., gxyz[2]..., arrowsize = 0.1,lengthscale=0.3,arrowcolor=:gree
 
 
 
-
-
 #--------------------------- Sub-cube interpolation----------------
+ax2=GLMakie.Axis3(f[1, 2])
 #calcuatin the sub-cubes interpolations stored in the mymdbm.ncubes[i].posinterp
 interpsubcubesolution!(mymdbm)
 #extracting the resutls to from the 
@@ -50,7 +51,7 @@ path2points = extract_paths(mymdbm)
 
 #extracting the unique points and plotting
 puniq = unique(collect(Iterators.flatten(Iterators.flatten(path2points))))
-scatter(f[1, 2],getindex.(puniq, 1), getindex.(puniq, 2), getindex.(puniq, 3), markersize = 6, color = :green)
+scatter!(ax2,getindex.(puniq, 1), getindex.(puniq, 2), getindex.(puniq, 3), markersize = 6, color = :green,label = "subface - solution")
 
 
 
@@ -60,12 +61,16 @@ flatened_path2points = collect(Iterators.flatten(path2points))
 true_truflatened_path2points = flatened_path2points[length.(flatened_path2points).==2]
 
 lines2plot = [(Point3f(ploc[1]) , Point3f(ploc[2])) for ploc in true_truflatened_path2points]
-linesegments!(lines2plot, linewidth=5)
+linesegments!(lines2plot, linewidth=5,label = "subface - connection")
 
 
+display(GLMakie.Screen(), f)
+axislegend(ax1)
+axislegend(ax2)
 
-fig = Figure(resolution = (1000, 600))
-lines(fig[1, 1],edge2plot_xyz..., linewidth=5)#mindpoints of the n-cubes
-linesegments(fig[1, 2],lines2plot, linewidth=5)#midpoints of the "faces" of the n-cubes
 
+fig = Figure(size = (1000, 600))
+lines(fig[1, 1],edge2plot_xyz..., linewidth=5,label = "midpoints solution connected")#mindpoints of the n-cubes
+linesegments(fig[1, 2],lines2plot, linewidth=5,label = "subface - connection")#midpoints of the "faces" of the n-cubes
 
+display(GLMakie.Screen(), fig)
