@@ -17,7 +17,7 @@ end
 mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0], constraint=c)
 #mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0]) # without constraint
 
-@time solve!(mymdbm, 2)#number of refinements - increase it slightly to see smoother results 
+@time solve!(mymdbm, 3)#number of refinements - increase it slightly to see smoother results 
 
 
 

@@ -375,7 +375,7 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     # filter!((nc)->sum((abs.(nc.posinterp)).^10.0)<(1.5 ^10.0),mdbm.ncubes)#1e6~=(2.0 ^20.0)
 
 
-    filter!((nc) -> norm(nc.posinterp.p, normp) < 1.0 + ncubetolerance, mdbm.ncubes)
+    filter!((nc) -> norm(nc.posinterp.p, normp) < 1.0 + ncubetolerance, ncubes)
     #filter!((nc)->!any(isnan.(nc.posinterp.p)),mdbm.ncubes)
 
     return nothing
@@ -600,6 +600,8 @@ function generateneighbours(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf
     end
     #-------direcational neightbours----------------
     filter!(nc -> !(any(nc.corner .< 1) || any((nc.corner + nc.size) .> [length.(mdbm.axes)...])), nc_neighbour)#remove the overhanging ncubes
+
+    deleteat!(nc_neighbour, MDBM.is_sorted_in_sorted(nc_neighbour, ncubes))# delete the ones, whihe were in the list onriginally
     sort!(nc_neighbour; alg=QuickSort)
     unique!(nc_neighbour)
     return nc_neighbour
@@ -622,21 +624,18 @@ It works only if the dimension of the solution object is larger the zero (the ma
     - `maxiteration::Int=0~: the max number of steps in the 'continuation-like' exploring. If zero, then infinity steps are allowed
 """
 function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}#only for unite size cubes
-
     if isempty(mdbm.ncubes)
         println("There is no bracketing n-cubes to check!")
     else
         ncubes2check = mdbm.ncubes
         numberofiteration = 0
         while !isempty(ncubes2check) && (maxiteration == 0 ? true : numberofiteration < maxiteration)
+
             numberofiteration += 1
             ncubes2check = generateneighbours(ncubes2check, mdbm)
             deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, mdbm.ncubes))#delete the ones which is already presented
             #@time fast_diff_sorted!(ncubes2check, mdbm.ncubes)#delete the ones which is already presented
-
-
             _interpolate!(ncubes2check, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance) #remove the non-bracketing, only proper new bracketing cubes remained
-
             append!(mdbm.ncubes, deepcopy(ncubes2check))
             sort!(mdbm.ncubes; alg=QuickSort)
         end
@@ -712,13 +711,30 @@ Refine the `MDBM_Problem` `iteration` times, then perform a neighbour check.
 julia> solve!(mymdbm,4)
 ```
 """
-function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, verbosity=0) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    if verbosity > 0
+        println("interpolate!")
+    end
     interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance)
     for k = 1:iteration
+        if verbosity > 0
+            println("refine!")
+        end
         refine!(mdbm)
+        if verbosity > 0
+            println("interpolate!")
+        end
         interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance)
     end
+
+    if verbosity > 0
+        println("checkneighbour! ")
+    end
     checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance)
+
+    if verbosity > 0
+        println("interpolate!")
+    end
     interpolate!(mdbm, normp=normp, ncubetolerance=ncubetolerance)
     return mdbm
 end
