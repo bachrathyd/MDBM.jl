@@ -56,17 +56,31 @@ end
 
 function getcornerval(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}#get it for all
     #getcornerval.(mdbm.ncubes,Ref(mdbm))
-    map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
+
+    funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
+    #mdbm.fc(unique(funargs))#prcomputed if it was not done before
+    mdbm.fc.(funargs)
+
+    #map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
 end
 
-function getcornerval(ncubes::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT,Nfc}
+function getcornerval(ncube::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT,Nfc}
     #PostionsVectors=(mdbm.axes.(corner(nc,mdbm.T01)))
     # (mdbm.fc).( (mdbm.axes).(corner(nc,mdbm.T01)) )
-    map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), corner(ncubes, mdbm.T01))
+
+    funargs = map(x -> ((mdbm.axes))(x...), corner(ncube, mdbm.T01))
+    #mdbm.fc(unique(funargs))#prcomputed if it was not done before
+    mdbm.fc.(funargs)
+
+    # map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), corner(ncubes, mdbm.T01))
 end
 
 function getcornerval(corers, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
-    map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), corers)
+    funargs = map(x -> ((mdbm.axes))(x...), corers)
+    #mdbm.fc(unique(funargs))#prcomputed if it was not done before
+    mdbm.fc.(funargs)
+
+    # map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), corers)
 end
 
 
@@ -188,7 +202,7 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, md
 
         posinterp = zeros(Float64, N)
         posinterp[getindex.(fixdim, 1)] .= -1 .+ 2 .* getindex.(fixdim, 2)
-        p, g = MDBM.fit_hyperplane(FunTupleVector, Nfree, Nf, Nc, typeof(FunTupleVector[1][1][1]), T11pinv)
+        p, g = fit_hyperplane(FunTupleVector, Val(Nfree), Val(Nf), Val(Nc), typeof(FunTupleVector[1][1][1]), T11pinv)
         posinterp[free_dims] .= p
 
         #normp = 50000.0
@@ -295,7 +309,13 @@ function issingchange(FunTupleVector::AbstractVector, Nf::Integer, Nc::Integer):
     ])#check for all condition
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{0}}, normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{0}}, normp=20.0, ncubetolerance=0.5, doThreadprecomp=false) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    if doThreadprecomp  #TODO: It is parallel, but Somehow it is slower!!
+        #println("precomsum(VargsIndehe missing elemnts toghether!")
+        funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
+        mdbm.fc(unique(funargs))#prcomputed if it was not done before
+
+    end
     isbracketing = map(nc -> issingchange(getcornerval(nc, mdbm), Nf, Nc), ncubes) #TODO: parallelize
     deleteat!(ncubes, .!isbracketing)#removeing the non-bracketing ncubes
 
@@ -305,16 +325,18 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     return nothing
 end
 
-function fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, T11pinv)
+function fit_hyperplane(FunTupleVector,  ::Val{N}, ::Val{Nf}, ::Val{Nc}, FT, T11pinv) where {N,Nf,Nc}
     posinterp = zeros(FT, N)
     grad = zeros(FT, N, Nf + Nc)
+
+    #TODO: store them somewhere - to reduce memory allcoations
+    As = MVector{Nf + Nc,FT}(undef)
+    ns = MMatrix{N,Nf + Nc,FT}(undef)
     if Nc == 0 || all(
         any((c) -> !isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
         for fi in 1:length(FunTupleVector[1][2])
     )# check the constraint: do wh have to compute at all?!?
 
-        As = zero(MVector{Nf + Nc,FT})
-        ns = zero(MMatrix{N,Nf + Nc,FT})
 
         #for f---------------------
         for kf = 1:Nf#length(FunTupleVector[1][1])
@@ -349,7 +371,7 @@ function fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, T11pinv)
             if rank(A) == minimum(size(A))
                 posinterp = a * (A \ d)
             else
-                posinterp = 1000.0
+                posinterp = 1000.0#put it outside the cube!
             end
 
         end
@@ -362,12 +384,18 @@ function fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, T11pinv)
     return posinterp, grad
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=false) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    if doThreadprecomp   #TODO: It is parallel, but Somehow it is slower!!
+
+        # println("precompute the missing elemnts toghether!")
+        funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(ncubes, mdbm.T01)))
+        mdbm.fc(unique(funargs))#prcomputed if it was not done before
+    end
     for nc in ncubes
         FunTupleVector = getcornerval(nc, mdbm)
-        p, g = fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, mdbm.T11pinv)
-        nc.posinterp.p[:] .= p
-        nc.gradient[:] .= g[:]
+        nc.posinterp.p[:], nc.gradient[:] = fit_hyperplane(FunTupleVector, Val(N), Val(Nf), Val(Nc), FT, mdbm.T11pinv)
+        # fit_hyperplane!(  nc.posinterp.p, nc.gradient ,FunTupleVector, N, Nf, Nc, FT, mdbm.T11pinv)# it is slow - not tested too much
+
     end
 
     #TODO: what if it falls outside of the n-cube, it should be removed ->what shall I do with the bracketing cubes?
@@ -381,7 +409,7 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     return nothing
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{Ninterp}}; normp=20.0, ncubetolerance=0.5) where {fcT,IT,FT,N,Ninterp,Nf,Nc,t01T,t11T,aT}
+function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{Ninterp}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=false) where {fcT,IT,FT,N,Ninterp,Nf,Nc,t01T,t11T,aT}
     error("order $(Ninterp) interpolation is not supperted (yet)")
 end
 
@@ -392,8 +420,8 @@ Interpolate the solution within the n-cube with order `interpolationorder`.
  - `interpolationorder=0` provide the midpoint of the n-cube
  - `interpolationorder=1` preform a linear fit and provide closest solution point to the mindpoint of the n-cube
 """
-function interpolate!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
-    _interpolate!(mdbm.ncubes, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance)
+function interpolate!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, doThreadprecomp=false) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    _interpolate!(mdbm.ncubes, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
 end
 
 
@@ -582,8 +610,7 @@ function generateneighbours(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf
     Nface = 2^N
     indpos = [[mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:N]
     indneg = [[!mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:N]
-
-    for nc in ncubes
+  @inbounds   for nc in ncubes
         fcvals = getcornerval(nc, mdbm)
         for dir in 1:N
             # indpos=[mdbm.T01[i][dir] for i in 1:Nface]
@@ -623,7 +650,7 @@ It works only if the dimension of the solution object is larger the zero (the ma
     - `interpolationorder::Int=0`: interpolation order method of the neighbours checked
     - `maxiteration::Int=0~: the max number of steps in the 'continuation-like' exploring. If zero, then infinity steps are allowed
 """
-function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}#only for unite size cubes
+function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=false) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}#only for unite size cubes
     if isempty(mdbm.ncubes)
         println("There is no bracketing n-cubes to check!")
     else
@@ -635,7 +662,7 @@ function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; int
             ncubes2check = generateneighbours(ncubes2check, mdbm)
             deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, mdbm.ncubes))#delete the ones which is already presented
             #@time fast_diff_sorted!(ncubes2check, mdbm.ncubes)#delete the ones which is already presented
-            _interpolate!(ncubes2check, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance) #remove the non-bracketing, only proper new bracketing cubes remained
+            _interpolate!(ncubes2check, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp) #remove the non-bracketing, only proper new bracketing cubes remained
             append!(mdbm.ncubes, deepcopy(ncubes2check))
             sort!(mdbm.ncubes; alg=QuickSort)
         end
@@ -711,11 +738,11 @@ Refine the `MDBM_Problem` `iteration` times, then perform a neighbour check.
 julia> solve!(mymdbm,4)
 ```
 """
-function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, verbosity=0) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, verbosity=1, doThreadprecomp=false) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     if verbosity > 0
         println("interpolate!")
     end
-    interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance)
+    interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
     for k = 1:iteration
         if verbosity > 0
             println("refine!")
@@ -724,18 +751,18 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::I
         if verbosity > 0
             println("interpolate!")
         end
-        interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance)
+        interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
     end
 
     if verbosity > 0
         println("checkneighbour! ")
     end
-    checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance)
+    checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
 
     if verbosity > 0
         println("interpolate!")
     end
-    interpolate!(mdbm, normp=normp, ncubetolerance=ncubetolerance)
+    interpolate!(mdbm, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
     return mdbm
 end
 
@@ -756,7 +783,7 @@ function index_sorted_in_sorted(a::AbstractVector, b::AbstractVector)::Array{Int
 end
 
 function is_sorted_in_sorted(a::AbstractVector, b::AbstractVector)::Array{Bool,1}
-    # is a[i] in b
+    # is a[i] in b?
     # a and b must be sorted
     iscontained = falses(length(a))
     startindex = 1
@@ -793,3 +820,53 @@ end
 #    append!(result, A[i:end])
 #    return result
 #end
+
+
+"""
+    merge_sorted(a::Vector{T}, b::Vector{T}; lt=(x,y)->x<y) where T
+
+Merge two sorted vectors `a` and `b` into a new sorted vector.
+`lt` is your “less than” comparator on elements.
+"""
+function merge_sorted(a::Vector{T}, b::Vector{T}; lt=(x, y) -> x < y) where T
+    na, nb = length(a), length(b)
+    c = Vector{T}(undef, na + nb)
+    ia = ib = ic = 1
+
+    while ia ≤ na && ib ≤ nb
+        if lt(a[ia], b[ib])
+            c[ic] = a[ia]
+            ia += 1
+        else
+            c[ic] = b[ib]
+            ib += 1
+        end
+        ic += 1
+    end
+
+    # copy any leftovers
+    if ia ≤ na
+        c[ic:end] = a[ia:na]
+    else
+        c[ic:end] = b[ib:nb]
+    end
+
+    return c
+end
+
+"""
+    sequential_insert!(v::Vector{T}, x::T; lt = isless) where T
+
+Insert `x` into the sorted vector `v` in‐place, preserving sorted order (using `lt(a,b)`).
+Returns the updated `v`.
+"""
+function sequential_insert!(v::Vector{T}, x::T; lt=isless) where T
+    # find the first index where `x` should go
+    idx = searchsortedfirst(v, x; lt=lt)
+    if idx > length(v)
+        push!(v, x)
+    else
+        insert!(v, idx, x)
+    end
+    return v
+end

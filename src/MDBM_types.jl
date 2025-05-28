@@ -5,25 +5,36 @@ struct MDBMcontainer{RTf,RTc,AT}
     callargs::AT
 end
 
+Base.isless(a::AT, b::MDBMcontainer{RTf,RTc,AT}) where {RTf,RTc,AT} = Base.isless(a, b.callargs)
+Base.isless(a::MDBMcontainer{RTf,RTc,AT}, b::AT) where {RTf,RTc,AT} = Base.isless(a.callargs, b)
+Base.isless(a::MDBMcontainer{RTf,RTc,AT}, b::MDBMcontainer{RTf,RTc,AT}) where {RTf,RTc,AT} = Base.isless(a.callargs, b.callargs)
+
 #TODO memoization for multiple functions Vector{Function}
 struct MemF{fT,cT,RTf,RTc,AT} <: Function
     f::fT
     c::cT
     fvalarg::Vector{MDBMcontainer{RTf,RTc,AT}}#funval,callargs
-    memoryacc::Vector{Int64} #number of function value call for already evaluated parameters
+    memoryacc::MVector{1,Int64} #number of function value call for already evaluated parameters
     MemF(f::fT, c::cT, cont::Vector{MDBMcontainer{RTf,RTc,AT}}) where {fT,cT,RTf,RTc,AT} = new{fT,cT,RTf,RTc,AT}(f, c, cont, [Int64(0)])
 end
 
-(memfun::MemF{fT,cT,RTf,RTc,AT})(::Type{RTf}, ::Type{RTc}, args...,) where {fT,cT,RTf,RTc,AT} = (memfun.f(args...,)::RTf, memfun.c(args...,)::RTc)
+(memfun::MemF{fT,cT,RTf,RTc,AT})(::Type{RTf}, ::Type{RTc}, args::AT) where {fT,cT,RTf,RTc,AT} = (memfun.f(args...,)::RTf, memfun.c(args...,)::RTc)::Tuple{RTf,RTc}
 
-function (memfun::MemF{fT,cT,RTf,RTc,AT})(args...,) where {fT,cT,RTf,RTc,AT}
+function (memfun::MemF{fT,cT,RTf,RTc,AT})(args::AT) where {fT,cT,RTf,RTc,AT}
     location = searchsortedfirst(memfun.fvalarg, args, lt=(x, y) -> isless(x.callargs, y))
+
     if length(memfun.fvalarg) < location
-        x = memfun(RTf, RTc, args...,)
+        #@show args
+        #@show memfun.fvalarg
+        #error("this should not happen do to the precalcuation!")
+        x = memfun(RTf, RTc, args)
         push!(memfun.fvalarg, MDBMcontainer{RTf,RTc,AT}(x..., args))
         return x
     elseif memfun.fvalarg[location].callargs != args
-        x = memfun(RTf, RTc, args...,)
+        #@show args
+        #@show memfun.fvalarg[location]
+        #error("this should not happen do to the precalcuation!")
+        x = memfun(RTf, RTc, args)
         insert!(memfun.fvalarg, location, MDBMcontainer{RTf,RTc,AT}(x..., args))
         return x
     else
@@ -32,9 +43,54 @@ function (memfun::MemF{fT,cT,RTf,RTc,AT})(args...,) where {fT,cT,RTf,RTc,AT}
     end
 end
 
-function (memfun::MemF{fT,cT,RTf,RTc,AT})(args::Tuple) where {fT,cT,RTf,RTc,AT}
-    memfun(args...,)
+
+function (memfun::MemF{fT,cT,RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {fT,cT,RTf,RTc,AT}
+    #setA = Set(Vargs)
+    #setB = Set(getfield.(memfun.fvalarg, :callargs))
+    #TheContainer = [MDBMcontainer{RTf,RTc,AT}(memfun(RTf, RTc, args2comp)..., args2comp) for args2comp in setA if args2comp ∉ setB]
+    #append!(memfun.fvalarg, TheContainer)        # now A has all elements
+    #sort!(memfun.fvalarg,by = s->s.callargs)
+
+    #println("Threaded")
+    Vargs = unique(sort(Vargs))
+    VargsIndex2compute = .!is_sorted_in_sorted(Vargs, memfun.fvalarg)
+
+    #@show sum(VargsIndex2compute)
+    TheContainer = Array{Tuple{RTf,RTc}}(undef, sum(VargsIndex2compute))
+    #Threads.@threads    for (index,args) in enumerate(Vargs[VargsIndex2compute])
+    Vargs2compute = sort(Vargs[VargsIndex2compute])
+    Threads.@threads for index in eachindex(Vargs2compute)
+        # @show Vargs2compute[index]
+        TheContainer[index] = memfun(RTf, RTc, Vargs2compute[index])
+    end
+
+    #@show length(memfun.fvalarg)
+
+    for args in Vargs2compute
+        location = searchsortedfirst(memfun.fvalarg, args, lt=(x, y) -> isless(x.callargs, y))
+        if length(memfun.fvalarg) < location
+            x = memfun(RTf, RTc, args)
+            push!(memfun.fvalarg, MDBMcontainer{RTf,RTc,AT}(x..., args))
+        elseif memfun.fvalarg[location].callargs != args
+            x = memfun(RTf, RTc, args)
+            insert!(memfun.fvalarg, location, MDBMcontainer{RTf,RTc,AT}(x..., args))
+        else
+            error("this should not happen do to only comput of missing elemnet")
+            memfun.memoryacc[1] += 1
+        end
+    end
+    # merge_sorted(memfun.fvalarg, TheContainer) # tooo, slow. Maybe due to the memory allocation and copying
+    return
 end
+
+
+
+
+# depraceted
+#function (memfun::MemF{fT,cT,RTf,RTc,AT})(args::Tuple) where {fT,cT,RTf,RTc,AT}
+#    println("----sdfsdfg-----------") 
+#       memfun(args...,)
+#end
 
 """
     Axis{T}
@@ -101,7 +157,7 @@ struct NCube{IT,FT,N,Nfc}
     size::MVector{N,IT}#Integer index of the axis
     posinterp::PositionTree{N,FT}#relative coordinate within the cube "(-1:1)" range
     bracketingncube::Bool
-    gradient ::MMatrix{N,Nfc,FT}#relative coordinate within the cube "(-1:1)" range
+    gradient::MMatrix{N,Nfc,FT}#relative coordinate within the cube "(-1:1)" range
     #gradient ::MVector{Nfc,MVector{N,FT}}
     # curvnorm::Vector{T}
 end
@@ -112,8 +168,8 @@ end
 # import Base.==
 # ==(a::NCube{IT,FT,N,Nf,Nc}, b::NCube{IT,FT,N,Nf,Nc}) where {IT,FT,N,Nf,Nc} = all([a.corner == b.corner, a.size == b.size])
 
-Base.isless(a::NCube, b::NCube)  = Base.isless([a.corner, a.size], [b.corner, b.size])
-Base.isequal(a::NCube, b::NCube)  = all([a.corner == b.corner, a.size == b.size])
+Base.isless(a::NCube, b::NCube) = Base.isless([a.corner, a.size], [b.corner, b.size])
+Base.isequal(a::NCube, b::NCube) = all([a.corner == b.corner, a.size == b.size])
 import Base.==
 ==(a::NCube, b::NCube) = all([a.corner == b.corner, a.size == b.size])
 
@@ -154,20 +210,20 @@ struct MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
 end
 
 #{IT,FT,N,Nfc}
-function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc,IT=Int,FT=Float64) where {fcT<:Function}# where {IT<:Integer} where {FT<:AbstractFloat}
-    N=length(axes)
+function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc, IT=Int, FT=Float64) where {fcT<:Function}# where {IT<:Integer} where {FT<:AbstractFloat}
+    N = length(axes)
     T01 = T01maker(Val(N))
     T11pinv = T11pinvmaker(Val(N))
-    Nfc=Nf+Nc
+    Nfc = Nf + Nc
     MDBM_Problem{fcT,N,Nf,Nc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
-        [NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))), 
-        PositionTree(zeros(FT, length(x))), true,MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:], T01, T11pinv)
+        [NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
+            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:], T01, T11pinv)
 end
 
 function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
     Nf=f(getindex.(axes0, 1)...) === nothing ? 0 : length(f(getindex.(axes0, 1)...)),
     Nc=constraint(getindex.(axes0, 1)...) === nothing ? 0 : length(constraint(getindex.(axes0, 1)...)))#Float16(1.), nothing
-    Nfc=Nf + Nc 
+    Nfc = Nf + Nc
     axes = deepcopy.(axes0)
     argtypesofmyfunc = map(x -> typeof(x).parameters[1], axes)#Argument Type
     AT = Tuple{argtypesofmyfunc...}
@@ -188,10 +244,11 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
     if memoization
         fun = MemF(f, constraint, Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
     else
+     #   fun = (x::AT) -> (f(x...)::RTf, constraint(x...)::RTc)::Tuple{RTf,RTc}
         fun = (x) -> (f(x...), constraint(x...))
     end
     Ndim = length(axes)
-    MDBM_Problem(fun, axes, Vector{NCube{Int64,Float64,Ndim, Nfc}}(undef, 0), Nf, Nc)
+    MDBM_Problem(fun, axes, Vector{NCube{Int64,Float64,Ndim,Nfc}}(undef, 0), Nf, Nc)
 end
 
 function MDBM_Problem(f::Function, a::AbstractVector{<:AbstractVector}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
@@ -217,7 +274,10 @@ function Base.show(io::IO, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) w
     if (typeof(mdbm.fc) <: MemF)
         println(io, "number of function evaluation: ", length(mdbm.fc.fvalarg))
         println(io, "number of memoized function call: ", mdbm.fc.memoryacc[1])
-        #println(io,"Ration of function evaluation compared to 'brute-force method': ", length(mdbm.fc.fvalarg)/prod(length.(mdbm.axes)))
+        ratio = length(mdbm.fc.fvalarg) / prod(length.(mdbm.axes))
+        if ratio > 0.0
+            println(io, "Ration of function evaluation compared to 'brute-force method': ", ratio)
+        end
     else
         println(io, "non-memoized version")
     end
