@@ -324,6 +324,13 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     end
     return nothing
 end
+function fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, T11pinv)
+    posinterp = zeros(FT, N)
+    grad = zeros(FT, N, Nf + Nc)
+    if Nc == 0 || all(
+        any((c) -> !isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
+        for fi in 1:length(FunTupleVector[1][2])
+    )# check the constraint: do wh have to compute at all?!?
 
 function fit_hyperplane(FunTupleVector,  ::Val{N}, ::Val{Nf}, ::Val{Nc}, FT, T11pinv) where {N,Nf,Nc}
     posinterp = zeros(FT, N)
