@@ -2,7 +2,7 @@ using MDBM
 using PyPlot
 pygui(true)
 
-
+using LinearAlgebra
 ### Axis with vector valued nodes
 
 # Task: find the solution along the eges of a triangle
@@ -33,7 +33,7 @@ Vect_mdbm=MDBM_Problem(foo_Vect_Float,[ax1,ax2])
 # the tree nodes of the triangle is not a proper initial mesh, so ax1 it is refined 3 times
 refine!(Vect_mdbm,directions=[1,1,1])
 scatter([P[1] for P in Vect_mdbm.axes[1]],[P[2] for P in Vect_mdbm.axes[1]],s=20)
-solve!(Vect_mdbm,4)
+solve!(Vect_mdbm,6)
 
 #solution points
 V_sol,r_sol=getinterpolatedsolution(Vect_mdbm) #Note V_sol is a Vector of Vectors

@@ -191,6 +191,8 @@ function interpsubcubesolution!(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t
 end
 
 function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    
+    
     for (face, fixdim) in zip(faces, fixed_dims)
         FunTupleVector = MDBM.getcornerval([corner .+ size .* T for T in face], mdbm)
 
@@ -200,10 +202,19 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, md
 
         T11pinv = MDBM.T11pinvmaker(Val(length(free_dims)))
 
-        posinterp = zeros(Float64, N)
-        posinterp[getindex.(fixdim, 1)] .= -1 .+ 2 .* getindex.(fixdim, 2)
+        posinterp = zeros(MVector{N,FT})
+        grad = zeros(MMatrix{N, Nf + Nc,FT})
+        
+        # As = MVector{Nf + Nc,FT}(undef)
+        # ns = MMatrix{length(free_dims),Nf + Nc,FT}(undef)
+        # fit_hyperplane!(FunTupleVector, Val(Nfree), Val(Nf), Val(Nc), T11pinv,
+        # posinterp[free_dims],grad[free_dims,:],As,ns)
+        
         p, g = fit_hyperplane(FunTupleVector, Val(Nfree), Val(Nf), Val(Nc), typeof(FunTupleVector[1][1][1]), T11pinv)
         posinterp[free_dims] .= p
+        
+        posinterp[getindex.(fixdim, 1)] .= -1 .+ 2 .* getindex.(fixdim, 2)
+        
 
         #normp = 50000.0
         #ncubetolerance = 0.2
@@ -286,12 +297,6 @@ function extract_paths(tree::PositionTree{N,T}, current_path=Vector{SVector{N,T}
     return paths_loc
 end
 
-
-
-
-
-
-
 function issingchange(FunTupleVector::AbstractVector, Nf::Integer, Nc::Integer)::Bool
     all([
         [
@@ -324,17 +329,76 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     end
     return nothing
 end
-function fit_hyperplane(FunTupleVector, N, Nf, Nc, FT, T11pinv)
-    posinterp = zeros(FT, N)
-    grad = zeros(FT, N, Nf + Nc)
+
+
+function fit_hyperplane!(FunTupleVector,  ::Val{N}, ::Val{Nf}, ::Val{Nc}, T11pinv,
+    posinterp::AbstractVector{FT},
+    grad::AbstractMatrix{FT},
+    As::AbstractVector{FT},ns::AbstractMatrix{FT}) where {N,Nf,Nc,FT}
+    # number of corners = 2^Nfree
+
+
+    #TODO: store them somewhere - to reduce memory allcoations
+    #As = MVector{Nf + Nc,FT}(undef)
+    #ns = MMatrix{N,Nf + Nc,FT}(undef)
     if Nc == 0 || all(
         any((c) -> !isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
         for fi in 1:length(FunTupleVector[1][2])
     )# check the constraint: do wh have to compute at all?!?
 
+
+        #for f---------------------
+        for kf = 1:Nf#length(FunTupleVector[1][1])
+            solloc = T11pinv * [FunTupleVector[kcubecorner][1][kf] for kcubecorner = 1:length(FunTupleVector)]
+            ns[:, kf] .= solloc[1:end-1]
+            As[kf] = solloc[end]
+            
+        end
+
+        #for c---if needed: that is, it is close to the boundary--------
+        activeCostraint = 0
+        for kf = 1:Nc#length(FunTupleVector[1][2])
+            #TODO: mivan a többszörös C teljesülése esetén!?!??!# ISSUE
+            if any((c) -> !isless(zero(c[2][kf]), c[2][kf]), FunTupleVector) && length(As) <= N  # use a constraint till it reduces the dimension to zero (point) and no further
+                solloc = T11pinv * [FunTupleVector[kcubecorner][2][kf] for kcubecorner = 1:length(FunTupleVector)]
+                activeCostraint += 1
+                As[Nf+activeCostraint] = solloc[end]
+                ns[:, Nf+activeCostraint] .= solloc[1:end-1]
+            end
+        end
+ 
+        # TOO sepcial, newer should be happen
+        #if (Nf + activeCostraint) == 0 
+        #    posinterp = zeros(MVector{N,FT})
+            # first two leads to error in the fucntion of constant due to the behaviour of pinv (eg. [1 0;0 1;0 0]/[1 0; 0 0; 0 0])
+            # nc.posinterp[:] .= transpose(view(ns, :, 1:(Nf + activeCostraint))) \ view(As, 1:(Nf + activeCostraint));#TEST
+            # nc.posinterp[:] .= transpose(ns[:, 1:(Nf + activeCostraint)]) \ As[1:(Nf + activeCostraint)];#TEST
+            # nc.posinterp[:] .= ns[:, 1:(Nf + activeCostraint)] * ((transpose(ns[:, 1:(Nf + activeCostraint)]) * ns[:, 1:(Nf + activeCostraint)]) \ view(As, 1:(Nf + activeCostraint)));
+
+            a = @view ns[:, 1:(Nf+activeCostraint)]
+            d = view(As, 1:(Nf+activeCostraint))
+            A = transpose(a) * a
+            if rank(A) == minimum(size(A))
+                posinterp[:] .= a * (A \ d)
+            else
+                posinterp[:] .= 1000.0#put it outside the cube!
+            end
+
+        #end
+        grad = ns
+        #for c---------------------
+    else
+        posinterp[:] .= 1000.0#put it outside the cube!
+        grad[:] .= NaN#put it outside the cube!
+    end
+    return posinterp, grad
+end
+
 function fit_hyperplane(FunTupleVector,  ::Val{N}, ::Val{Nf}, ::Val{Nc}, FT, T11pinv) where {N,Nf,Nc}
-    posinterp = zeros(FT, N)
-    grad = zeros(FT, N, Nf + Nc)
+    # number of corners = 2^Nfree
+
+    posinterp = zeros(MVector{N,FT})
+    grad = zeros(MMatrix{N, Nf + Nc,FT})
 
     #TODO: store them somewhere - to reduce memory allcoations
     As = MVector{Nf + Nc,FT}(undef)
@@ -365,7 +429,7 @@ function fit_hyperplane(FunTupleVector,  ::Val{N}, ::Val{Nf}, ::Val{Nc}, FT, T11
         end
 
         if (Nf + activeCostraint) == 0
-            posinterp = zero(FT)
+            posinterp = zeros(MVector{N,FT})
         else
             # first two leads to error in the fucntion of constant due to the behaviour of pinv (eg. [1 0;0 1;0 0]/[1 0; 0 0; 0 0])
             # nc.posinterp[:] .= transpose(view(ns, :, 1:(Nf + activeCostraint))) \ view(As, 1:(Nf + activeCostraint));#TEST
@@ -376,9 +440,9 @@ function fit_hyperplane(FunTupleVector,  ::Val{N}, ::Val{Nf}, ::Val{Nc}, FT, T11
             d = view(As, 1:(Nf+activeCostraint))
             A = transpose(a) * a
             if rank(A) == minimum(size(A))
-                posinterp = a * (A \ d)
+                posinterp[:] .= a * (A \ d)
             else
-                posinterp = 1000.0#put it outside the cube!
+                posinterp[:] .= 1000.0#put it outside the cube!
             end
 
         end
@@ -398,11 +462,15 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
         funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(ncubes, mdbm.T01)))
         mdbm.fc(unique(funargs))#prcomputed if it was not done before
     end
+
+    As = MVector{Nf + Nc,FT}(undef)
+    ns = MMatrix{N,Nf + Nc,FT}(undef)
     for nc in ncubes
         FunTupleVector = getcornerval(nc, mdbm)
-        nc.posinterp.p[:], nc.gradient[:] = fit_hyperplane(FunTupleVector, Val(N), Val(Nf), Val(Nc), FT, mdbm.T11pinv)
-        # fit_hyperplane!(  nc.posinterp.p, nc.gradient ,FunTupleVector, N, Nf, Nc, FT, mdbm.T11pinv)# it is slow - not tested too much
-
+        fit_hyperplane!(FunTupleVector, Val(N), Val(Nf), Val(Nc), mdbm.T11pinv,
+        nc.posinterp.p,nc.gradient,As,ns)
+        # nc.posinterp.p[:], nc.gradient[:] = fit_hyperplane(FunTupleVector, Val(N), Val(Nf), Val(Nc), FT, mdbm.T11pinv)
+      
     end
 
     #TODO: what if it falls outside of the n-cube, it should be removed ->what shall I do with the bracketing cubes?
@@ -617,7 +685,7 @@ function generateneighbours(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf
     Nface = 2^N
     indpos = [[mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:N]
     indneg = [[!mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:N]
-  @inbounds   for nc in ncubes
+    @inbounds for nc in ncubes
         fcvals = getcornerval(nc, mdbm)
         for dir in 1:N
             # indpos=[mdbm.T01[i][dir] for i in 1:Nface]

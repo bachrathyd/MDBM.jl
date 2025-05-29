@@ -9,19 +9,21 @@ Base.isless(a::AT, b::MDBMcontainer{RTf,RTc,AT}) where {RTf,RTc,AT} = Base.isles
 Base.isless(a::MDBMcontainer{RTf,RTc,AT}, b::AT) where {RTf,RTc,AT} = Base.isless(a.callargs, b)
 Base.isless(a::MDBMcontainer{RTf,RTc,AT}, b::MDBMcontainer{RTf,RTc,AT}) where {RTf,RTc,AT} = Base.isless(a.callargs, b.callargs)
 
+
+#TODO: Shifting leads to memory movements! Fix: switch to an OrderedDict{AT,Tuple{RTf,RTc}} (or even a plain Dict plus a separate sorted key‐list only when you need ordering). Lookups/inserts become amortized O(1), no shifting. 
 #TODO memoization for multiple functions Vector{Function}
 struct MemF{fT,cT,RTf,RTc,AT} <: Function
     f::fT
     c::cT
     fvalarg::Vector{MDBMcontainer{RTf,RTc,AT}}#funval,callargs
-    memoryacc::MVector{1,Int64} #number of function value call for already evaluated parameters
-    MemF(f::fT, c::cT, cont::Vector{MDBMcontainer{RTf,RTc,AT}}) where {fT,cT,RTf,RTc,AT} = new{fT,cT,RTf,RTc,AT}(f, c, cont, [Int64(0)])
+    memoryacc::Ref{Int64}#MVector{1,Int64} #number of function value call for already evaluated parameters
+    MemF(f::fT, c::cT, cont::Vector{MDBMcontainer{RTf,RTc,AT}}) where {fT,cT,RTf,RTc,AT} = new{fT,cT,RTf,RTc,AT}(f, c, cont, Ref(Int64(0)))
 end
 
 (memfun::MemF{fT,cT,RTf,RTc,AT})(::Type{RTf}, ::Type{RTc}, args::AT) where {fT,cT,RTf,RTc,AT} = (memfun.f(args...,)::RTf, memfun.c(args...,)::RTc)::Tuple{RTf,RTc}
 
 function (memfun::MemF{fT,cT,RTf,RTc,AT})(args::AT) where {fT,cT,RTf,RTc,AT}
-    location = searchsortedfirst(memfun.fvalarg, args, lt=(x, y) -> isless(x.callargs, y))
+    location = searchsortedfirst(memfun.fvalarg, args)
 
     if length(memfun.fvalarg) < location
         #@show args
@@ -38,12 +40,12 @@ function (memfun::MemF{fT,cT,RTf,RTc,AT})(args::AT) where {fT,cT,RTf,RTc,AT}
         insert!(memfun.fvalarg, location, MDBMcontainer{RTf,RTc,AT}(x..., args))
         return x
     else
-        memfun.memoryacc[1] += 1
+        memfun.memoryacc[] += 1
         return (memfun.fvalarg[location].funval, memfun.fvalarg[location].cval)
     end
 end
 
-
+#TODO Inconsistent return in the “batch” call - it should return a vector of the results of the function should be renamed e.g.: prefill!
 function (memfun::MemF{fT,cT,RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {fT,cT,RTf,RTc,AT}
     #setA = Set(Vargs)
     #setB = Set(getfield.(memfun.fvalarg, :callargs))
@@ -67,7 +69,7 @@ function (memfun::MemF{fT,cT,RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {fT,c
     #@show length(memfun.fvalarg)
 
     for args in Vargs2compute
-        location = searchsortedfirst(memfun.fvalarg, args, lt=(x, y) -> isless(x.callargs, y))
+        location = searchsortedfirst(memfun.fvalarg, args)
         if length(memfun.fvalarg) < location
             x = memfun(RTf, RTc, args)
             push!(memfun.fvalarg, MDBMcontainer{RTf,RTc,AT}(x..., args))
@@ -76,11 +78,11 @@ function (memfun::MemF{fT,cT,RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {fT,c
             insert!(memfun.fvalarg, location, MDBMcontainer{RTf,RTc,AT}(x..., args))
         else
             error("this should not happen do to only comput of missing elemnet")
-            memfun.memoryacc[1] += 1
+            memfun.memoryacc[] += 1
         end
     end
     # merge_sorted(memfun.fvalarg, TheContainer) # tooo, slow. Maybe due to the memory allocation and copying
-    return
+    return nothing
 end
 
 
@@ -273,7 +275,7 @@ function Base.show(io::IO, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) w
 
     if (typeof(mdbm.fc) <: MemF)
         println(io, "number of function evaluation: ", length(mdbm.fc.fvalarg))
-        println(io, "number of memoized function call: ", mdbm.fc.memoryacc[1])
+        println(io, "number of memoized function call: ", mdbm.fc.memoryacc[])
         ratio = length(mdbm.fc.fvalarg) / prod(length.(mdbm.axes))
         if ratio > 0.0
             println(io, "Ration of function evaluation compared to 'brute-force method': ", ratio)
