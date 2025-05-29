@@ -1,7 +1,7 @@
 name = "MDBM"
 uuid = "dd61e66b-39ce-57b0-8813-509f78be4b4d"
 authors = ["Daniel Bachrathy"]
-version = "0.1.6"
+version = "0.2.1"
 
 [deps]
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
