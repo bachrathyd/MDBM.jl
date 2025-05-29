@@ -45,13 +45,35 @@ module MDBM
 using StaticArrays
 using LinearAlgebra
 
+#using PrecompileTools: @setup_workload, @compile_workload    # this is a small dependency
+
 export MDBM_Problem, Axis,
- solve!, interpolate!, refine!, checkneighbour!,
-  axesextend!, getinterpolatedsolution, getevaluatedpoints, getevaluatedfunctionvalues, getevaluatedconstraintvalues,
- connect, triangulation,getinterpolatedgradient,
- interpsubcubesolution!,extract_paths
+    solve!, interpolate!, refine!, checkneighbour!,
+    axesextend!, getinterpolatedsolution, getevaluatedpoints, getevaluatedfunctionvalues, getevaluatedconstraintvalues,
+    connect, triangulation, getinterpolatedgradient,
+    interpsubcubesolution!, extract_paths
 
 include("MDBM_types.jl")
 include("MDBM_functions.jl")
+
+
+
+#@setup_workload begin
+#    # Putting some things in `@setup_workload` instead of `@compile_workload` can reduce the size of the
+#    # precompile file and potentially make loading faster.
+#    function foo_par3_codim1(x, y, z)
+#        x^2.0 + y^2.0 + z^2.0 - 2.0^2.0
+#    end
+#    function c(x, y, z)
+#        x^2.0 + y^2.0 - 0.5^2.0
+#    end
+#    @compile_workload begin
+#        
+#        mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0], constraint=c)
+#        solve!(mymdbm, 2, doThreadprecomp=false, verbosity=0)
+#        xyz_sol = getinterpolatedsolution(mymdbm)
+#    end
+#end
+
 
 end

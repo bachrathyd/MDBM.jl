@@ -19,27 +19,37 @@ end
 
 
 mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0], constraint=c)
-solve!(mymdbm, 2, doThreadprecomp=false, verbosity=0)
+solve!(mymdbm, 2, doThreadprecomp=false, verbosity=1)
+mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0], constraint=c)
+solve!(mymdbm, 2, doThreadprecomp=true, verbosity=1)
 
+Base.summarysize(mymdbm.fc.fvalarg)/1024^1
 
 
 function foo(n, b=true)
     mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0], constraint=c, memoization=b)
-    solve!(mymdbm, n, doThreadprecomp=false, verbosity=0)
+    solve!(mymdbm, n, doThreadprecomp=true, verbosity=0)
 end
 
 for kk in 1:5
     println(kk)
-    @time foo(kk, false)#number of refinements - increase it slightly to see smoother results 
+    @time foo(kk, true)#number of refinements - increase it slightly to see smoother results 
 end
 
 ##
 5+5
 foo(4,true)
-@profview foo(4,true);
+@profview foo(4,false);
 
-##  using BenchmarkTools
-##  @benchmark foo($5)
+##
+ using BenchmarkTools
+ @benchmark foo($3)
+ @benchmark foo($4)
+
+
+ ##
+
+ l
  f = Figure(size=(1000, 600))
  ax1 = GLMakie.Axis3(f[1, 1])
  

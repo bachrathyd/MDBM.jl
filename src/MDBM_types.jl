@@ -66,7 +66,11 @@ function (memfun::MemF{fT,cT,RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {fT,c
         TheContainer[index] = memfun(RTf, RTc, Vargs2compute[index])
     end
 
-    #@show length(memfun.fvalarg)
+   #@show length(memfun.fvalarg)
+   sizehint!(memfun.fvalarg, (length(memfun.fvalarg) + length(Vargs)) * 1.2)
+   #println("Sizehint for memfun.fvalarg: ", length(memfun.fvalarg) + length(Vargs))
+
+
 
     for args in Vargs2compute
         location = searchsortedfirst(memfun.fvalarg, args)
@@ -246,7 +250,7 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
     if memoization
         fun = MemF(f, constraint, Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
     else
-     #   fun = (x::AT) -> (f(x...)::RTf, constraint(x...)::RTc)::Tuple{RTf,RTc}
+        #   fun = (x::AT) -> (f(x...)::RTf, constraint(x...)::RTc)::Tuple{RTf,RTc}
         fun = (x) -> (f(x...), constraint(x...))
     end
     Ndim = length(axes)
