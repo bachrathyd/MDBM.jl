@@ -1,3 +1,56 @@
+"""
+    SortedCache{K,V}
+
+A small wrapper that keeps:
+  • `data::Dict{K,V}` for O(1) lookup/insert  
+  • `keys::Vector{K}` (sorted) for position‐indexing/searchsortedfirst  
+
+Insertion only does a binary‐search+`insert!` on the *key* array (cheap `K` copies,
+not shifting huge containers), and storing the heavy `V` in a hash‐table.
+"""
+struct SortedCache{K,V}
+    data::Dict{K,V}
+    keys::Vector{K}
+end
+
+SortedCache{K,V}() where {K,V} = SortedCache(Dict{K,V}(), Vector{K}())
+
+# insert or update
+function insert!(sc::SortedCache{K,V}, key::K, val::V) where {K,V}
+    if !haskey(sc.data, key)
+        i = searchsortedfirst(sc.keys, key)
+        Base.insert!(sc.keys, i, key)      # shifts only K’s, not whole containers
+    end
+    sc.data[key] = val
+    return nothing
+end
+
+# lookup by key
+get(sc::SortedCache{K,V}, key::K, default) where {K,V} = get(sc.data, key, default)
+Base.getindex(sc::SortedCache{K,V}, key::K) where {K,V} = sc.data[key]
+
+# “vector” interface: idx→ (funval,cval,callargs)
+Base.length(sc::SortedCache) = length(sc.keys)
+function Base.getindex(sc::SortedCache{K,V}, i::Integer) where {K,V}
+    k = sc.keys[i]
+    return sc.data[k]
+end
+
+# allow `searchsortedfirst(sc, key)` and iteration
+Base.iterate(sc::SortedCache) = iterate(sc.keys)
+Base.iterate(sc::SortedCache, st) = iterate(sc.keys, st)
+Base.searchsortedfirst(sc::SortedCache{K,V}, key::K) where {K,V} =
+    searchsortedfirst(sc.keys, key)
+
+
+
+
+
+
+
+
+
+
 
 struct MDBMcontainer{RTf,RTc,AT}
     funval::RTf
@@ -15,34 +68,44 @@ Base.isless(a::MDBMcontainer{RTf,RTc,AT}, b::MDBMcontainer{RTf,RTc,AT}) where {R
 struct MemF{fT,cT,RTf,RTc,AT} <: Function
     f::fT
     c::cT
-    fvalarg::Vector{MDBMcontainer{RTf,RTc,AT}}#funval,callargs
+    fvalarg::SortedCache{AT,Tuple{RTf,RTc}}#Vector{MDBMcontainer{RTf,RTc,AT}}#funval,callargs
     memoryacc::Ref{Int64}#MVector{1,Int64} #number of function value call for already evaluated parameters
-    MemF(f::fT, c::cT, cont::Vector{MDBMcontainer{RTf,RTc,AT}}) where {fT,cT,RTf,RTc,AT} = new{fT,cT,RTf,RTc,AT}(f, c, cont, Ref(Int64(0)))
+    MemF(f::fT, c::cT, cont::SortedCache{AT,Tuple{RTf,RTc}}) where {fT,cT,RTf,RTc,AT} = new{fT,cT,RTf,RTc,AT}(f, c, cont, Ref(Int64(0)))
+    #MemF(f::fT, c::cT) where {fT,cT,RTf,RTc,AT} = new{fT,cT,RTf,RTc,AT}(f, c, SortedCache{AT,Tuple{RTf,RTc}}(), Ref(Int64(0)))
 end
 
 (memfun::MemF{fT,cT,RTf,RTc,AT})(::Type{RTf}, ::Type{RTc}, args::AT) where {fT,cT,RTf,RTc,AT} = (memfun.f(args...,)::RTf, memfun.c(args...,)::RTc)::Tuple{RTf,RTc}
 
 function (memfun::MemF{fT,cT,RTf,RTc,AT})(args::AT) where {fT,cT,RTf,RTc,AT}
-    location = searchsortedfirst(memfun.fvalarg, args)
-
-    if length(memfun.fvalarg) < location
-        #@show args
-        #@show memfun.fvalarg
-        #error("this should not happen do to the precalcuation!")
-        x = memfun(RTf, RTc, args)
-        push!(memfun.fvalarg, MDBMcontainer{RTf,RTc,AT}(x..., args))
-        return x
-    elseif memfun.fvalarg[location].callargs != args
-        #@show args
-        #@show memfun.fvalarg[location]
-        #error("this should not happen do to the precalcuation!")
-        x = memfun(RTf, RTc, args)
-        insert!(memfun.fvalarg, location, MDBMcontainer{RTf,RTc,AT}(x..., args))
-        return x
+    if haskey(memfun.fvalarg.data, args)
+        return memfun.fvalarg[args]
     else
-        memfun.memoryacc[] += 1
-        return (memfun.fvalarg[location].funval, memfun.fvalarg[location].cval)
+        x = memfun(RTf, RTc, args)
+        insert!(memfun.fvalarg, args, x)
+        return x
     end
+  #  # deprecated #  #  @show location = searchsortedfirst(memfun.fvalarg, args)
+  #  # deprecated #  #  @show length(memfun.fvalarg)
+  #  # deprecated #  #  if length(memfun.fvalarg) < location
+  #  # deprecated #  #      #@show args
+  #  # deprecated #  #      #@show memfun.fvalarg
+  #  # deprecated #  #      #error("this should not happen do to the precalcuation!")
+  #  # deprecated #  #      x = memfun(RTf, RTc, args)
+  #  # deprecated #  #      #push!(memfun.fvalarg, MDBMcontainer{RTf,RTc,AT}(x..., args))
+  #  # deprecated #  #      insert!(memfun.fvalarg, args, x)
+  #  # deprecated #  #      return x
+  #  # deprecated #  #      #elseif memfun.fvalarg[location].callargs != args
+  #  # deprecated #  #      #    #@show args
+  #  # deprecated #  #      #    #@show memfun.fvalarg[location]
+  #  # deprecated #  #      #    #error("this should not happen do to the precalcuation!")
+  #  # deprecated #  #      #    x = memfun(RTf, RTc, args)
+  #  # deprecated #  #      #    insert!(memfun.fvalarg, args, x)
+  #  # deprecated #  #      #    #insert!(memfun.fvalarg, location, MDBMcontainer{RTf,RTc,AT}(x..., args))
+  #  # deprecated #  #      #    return x
+  #  # deprecated #  #  else
+  #  # deprecated #  #      memfun.memoryacc[] += 1
+  #  # deprecated #  #      return (memfun.fvalarg[location].funval, memfun.fvalarg[location].cval)
+  #  # deprecated #  #  end
 end
 
 #TODO Inconsistent return in the “batch” call - it should return a vector of the results of the function should be renamed e.g.: prefill!
@@ -66,9 +129,9 @@ function (memfun::MemF{fT,cT,RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {fT,c
         TheContainer[index] = memfun(RTf, RTc, Vargs2compute[index])
     end
 
-   #@show length(memfun.fvalarg)
-   sizehint!(memfun.fvalarg, (length(memfun.fvalarg) + length(Vargs)) * 1.2)
-   #println("Sizehint for memfun.fvalarg: ", length(memfun.fvalarg) + length(Vargs))
+    #@show length(memfun.fvalarg)
+    sizehint!(memfun.fvalarg, (length(memfun.fvalarg) + length(Vargs)) * 1.2)
+    #println("Sizehint for memfun.fvalarg: ", length(memfun.fvalarg) + length(Vargs))
 
 
 
@@ -248,7 +311,7 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
     end
 
     if memoization
-        fun = MemF(f, constraint, Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
+        fun = MemF(f, constraint, SortedCache{AT,Tuple{RTf,RTc}}())#Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
     else
         #   fun = (x::AT) -> (f(x...)::RTf, constraint(x...)::RTc)::Tuple{RTf,RTc}
         fun = (x) -> (f(x...), constraint(x...))
