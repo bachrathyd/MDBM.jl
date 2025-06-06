@@ -1,9 +1,7 @@
-5 + 5
-using Revise
 using MDBM
-
 using GLMakie
-
+GLMakie.closeall()
+GLMakie.activate!(; title="4 parameters, codimension 2")
 
 
 #-----------------------------
@@ -25,6 +23,7 @@ f = Figure()
 xyzr_sol = getinterpolatedsolution(mymdbm)
 scatter(f[1, 1],xyzr_sol[1:3]..., markersize = 6, color = xyzr_sol[4])
 
+display(GLMakie.Screen(), f)
 # # show the points where the function is evaluated
 # xyzr_val = getevaluatedpoints(mymdbm)
 # fval=getevaluatedfunctionvalues(mymdbm)

@@ -25,6 +25,57 @@ function insert!(sc::SortedCache{K,V}, key::K, val::V) where {K,V}
     return nothing
 end
 
+
+"""
+    append_SortedCache!(sc::SortedCache{K,V}, kvs::Vector{Pair{K,V}})
+
+Insert many (key ⇒ val) pairs at once.  New keys are sorted,
+duplicates overwrite, and the merge cost is O(n₁+n₂), not O(n₂·n₁).
+"""
+function append_SortedCache!(sc::SortedCache{K,V}, kvs::Vector{Pair{K,V}}) where {K,V}
+    # 1) sort your incoming batch by key
+    sort!(kvs, by=p -> p.first)
+
+    # 2) extract sorted keys & vals
+    newkeys = [p.first for p in kvs]
+    newvals = [p.second for p in kvs]
+
+    # 3) merge old sc.keys and newkeys into one vector
+    oldkeys = sc.keys
+    merged = Vector{K}(undef, length(oldkeys) + length(newkeys))
+    i = j = k = 1
+    while i ≤ length(oldkeys) && j ≤ length(newkeys)
+        if oldkeys[i] === newkeys[j] || oldkeys[i] < newkeys[j]
+            merged[k] = oldkeys[i]
+            i += 1
+        else
+            merged[k] = newkeys[j]
+            sc.data[newkeys[j]] = newvals[j]  # insert into Dict
+            j += 1
+        end
+        k += 1
+    end
+    # finish leftovers
+    while i ≤ length(oldkeys)
+        merged[k] = oldkeys[i]
+        i += 1
+        k += 1
+    end
+    while j ≤ length(newkeys)
+        merged[k] = newkeys[j]
+        sc.data[newkeys[j]] = newvals[j]
+        j += 1
+        k += 1
+    end
+
+    resize!(merged, k - 1)
+    # instead of sc.keys = merged, do:
+    empty!(sc.keys)               # drop all old entries
+    Base.append!(sc.keys, merged)      # fill in the merged key‐list
+    return nothing
+end
+
+
 # lookup by key
 get(sc::SortedCache{K,V}, key::K, default) where {K,V} = get(sc.data, key, default)
 Base.getindex(sc::SortedCache{K,V}, key::K) where {K,V} = sc.data[key]
@@ -78,76 +129,57 @@ end
 
 function (memfun::MemF{fT,cT,RTf,RTc,AT})(args::AT) where {fT,cT,RTf,RTc,AT}
     if haskey(memfun.fvalarg.data, args)
+        memfun.memoryacc[] += 1
         return memfun.fvalarg[args]
     else
         x = memfun(RTf, RTc, args)
         insert!(memfun.fvalarg, args, x)
         return x
     end
-  #  # deprecated #  #  @show location = searchsortedfirst(memfun.fvalarg, args)
-  #  # deprecated #  #  @show length(memfun.fvalarg)
-  #  # deprecated #  #  if length(memfun.fvalarg) < location
-  #  # deprecated #  #      #@show args
-  #  # deprecated #  #      #@show memfun.fvalarg
-  #  # deprecated #  #      #error("this should not happen do to the precalcuation!")
-  #  # deprecated #  #      x = memfun(RTf, RTc, args)
-  #  # deprecated #  #      #push!(memfun.fvalarg, MDBMcontainer{RTf,RTc,AT}(x..., args))
-  #  # deprecated #  #      insert!(memfun.fvalarg, args, x)
-  #  # deprecated #  #      return x
-  #  # deprecated #  #      #elseif memfun.fvalarg[location].callargs != args
-  #  # deprecated #  #      #    #@show args
-  #  # deprecated #  #      #    #@show memfun.fvalarg[location]
-  #  # deprecated #  #      #    #error("this should not happen do to the precalcuation!")
-  #  # deprecated #  #      #    x = memfun(RTf, RTc, args)
-  #  # deprecated #  #      #    insert!(memfun.fvalarg, args, x)
-  #  # deprecated #  #      #    #insert!(memfun.fvalarg, location, MDBMcontainer{RTf,RTc,AT}(x..., args))
-  #  # deprecated #  #      #    return x
-  #  # deprecated #  #  else
-  #  # deprecated #  #      memfun.memoryacc[] += 1
-  #  # deprecated #  #      return (memfun.fvalarg[location].funval, memfun.fvalarg[location].cval)
-  #  # deprecated #  #  end
+    #  # deprecated #  #  @show location = searchsortedfirst(memfun.fvalarg, args)
+    #  # deprecated #  #  @show length(memfun.fvalarg)
+    #  # deprecated #  #  if length(memfun.fvalarg) < location
+    #  # deprecated #  #      #@show args
+    #  # deprecated #  #      #@show memfun.fvalarg
+    #  # deprecated #  #      #error("this should not happen do to the precalcuation!")
+    #  # deprecated #  #      x = memfun(RTf, RTc, args)
+    #  # deprecated #  #      #push!(memfun.fvalarg, MDBMcontainer{RTf,RTc,AT}(x..., args))
+    #  # deprecated #  #      insert!(memfun.fvalarg, args, x)
+    #  # deprecated #  #      return x
+    #  # deprecated #  #      #elseif memfun.fvalarg[location].callargs != args
+    #  # deprecated #  #      #    #@show args
+    #  # deprecated #  #      #    #@show memfun.fvalarg[location]
+    #  # deprecated #  #      #    #error("this should not happen do to the precalcuation!")
+    #  # deprecated #  #      #    x = memfun(RTf, RTc, args)
+    #  # deprecated #  #      #    insert!(memfun.fvalarg, args, x)
+    #  # deprecated #  #      #    #insert!(memfun.fvalarg, location, MDBMcontainer{RTf,RTc,AT}(x..., args))
+    #  # deprecated #  #      #    return x
+    #  # deprecated #  #  else
+    #  # deprecated #  #      memfun.memoryacc[] += 1
+    #  # deprecated #  #      return (memfun.fvalarg[location].funval, memfun.fvalarg[location].cval)
+    #  # deprecated #  #  end
 end
 
 #TODO Inconsistent return in the “batch” call - it should return a vector of the results of the function should be renamed e.g.: prefill!
 function (memfun::MemF{fT,cT,RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {fT,cT,RTf,RTc,AT}
-    #setA = Set(Vargs)
-    #setB = Set(getfield.(memfun.fvalarg, :callargs))
-    #TheContainer = [MDBMcontainer{RTf,RTc,AT}(memfun(RTf, RTc, args2comp)..., args2comp) for args2comp in setA if args2comp ∉ setB]
-    #append!(memfun.fvalarg, TheContainer)        # now A has all elements
-    #sort!(memfun.fvalarg,by = s->s.callargs)
-
     #println("Threaded")
     Vargs = unique(sort(Vargs))
     VargsIndex2compute = .!is_sorted_in_sorted(Vargs, memfun.fvalarg)
 
     #@show sum(VargsIndex2compute)
-    TheContainer = Array{Tuple{RTf,RTc}}(undef, sum(VargsIndex2compute))
+    TheContainer_sorted = Array{Tuple{RTf,RTc}}(undef, sum(VargsIndex2compute))
     #Threads.@threads    for (index,args) in enumerate(Vargs[VargsIndex2compute])
-    Vargs2compute = sort(Vargs[VargsIndex2compute])
-    Threads.@threads for index in eachindex(Vargs2compute)
+
+
+    Vargs2compute_sorted = sort(Vargs[VargsIndex2compute])
+    Threads.@threads for index in eachindex(Vargs2compute_sorted)
         # @show Vargs2compute[index]
-        TheContainer[index] = memfun(RTf, RTc, Vargs2compute[index])
+        TheContainer_sorted[index] = memfun(RTf, RTc, Vargs2compute_sorted[index])
     end
 
-    #@show length(memfun.fvalarg)
-    sizehint!(memfun.fvalarg, (length(memfun.fvalarg) + length(Vargs)) * 1.2)
-    #println("Sizehint for memfun.fvalarg: ", length(memfun.fvalarg) + length(Vargs))
+    # sort them in-place by key:
+    append_SortedCache!(memfun.fvalarg, Pair.(Vargs2compute_sorted, TheContainer_sorted))
 
-
-
-    for args in Vargs2compute
-        location = searchsortedfirst(memfun.fvalarg, args)
-        if length(memfun.fvalarg) < location
-            x = memfun(RTf, RTc, args)
-            push!(memfun.fvalarg, MDBMcontainer{RTf,RTc,AT}(x..., args))
-        elseif memfun.fvalarg[location].callargs != args
-            x = memfun(RTf, RTc, args)
-            insert!(memfun.fvalarg, location, MDBMcontainer{RTf,RTc,AT}(x..., args))
-        else
-            error("this should not happen do to only comput of missing elemnet")
-            memfun.memoryacc[] += 1
-        end
-    end
     # merge_sorted(memfun.fvalarg, TheContainer) # tooo, slow. Maybe due to the memory allocation and copying
     return nothing
 end
@@ -285,8 +317,9 @@ function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc, IT=Int, FT
     T11pinv = T11pinvmaker(Val(N))
     Nfc = Nf + Nc
     MDBM_Problem{fcT,N,Nf,Nc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
-        [NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
-            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:], T01, T11pinv)
+        sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
+            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:])
+            , T01, T11pinv)
 end
 
 function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),

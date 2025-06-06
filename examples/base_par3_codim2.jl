@@ -19,7 +19,7 @@ xyz_sol = getinterpolatedsolution(mymdbm)
 scatter!(ax1, xyz_sol..., markersize=6, color=:red, marker='x', strokewidth=3, label="solution")
 
 # show the points where the function is evaluated
-sxyz_val = getevaluatedpoints(mymdbm)
+xyz_val = getevaluatedpoints(mymdbm)
 fval = getevaluatedfunctionvalues(mymdbm)
 colors = map(f -> RGBf(
         sign(f[1]) / 2 + 0.5,
@@ -34,11 +34,11 @@ DT1 = connect(mymdbm)
 edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)], fill(NaN, length(DT1))])'[:] for i_sol in xyz_sol]
 lines!(edge2plot_xyz..., linewidth=5, label="midpoints solution connected")
 
-#TODO: uncomment for the gradinets
-#plotting the gradintes
-gxyz = getinterpolatedgradient(mymdbm.ncubes, mymdbm)
-arrows!(xyz_sol..., gxyz[1]..., arrowsize=0.1, lengthscale=0.3, arrowcolor=:blue)
-arrows!(xyz_sol..., gxyz[2]..., arrowsize=0.1, lengthscale=0.3, arrowcolor=:green)
+# #TODO: uncomment for the gradinets
+# #plotting the gradintes
+# gxyz = getinterpolatedgradient(mymdbm.ncubes, mymdbm)
+# arrows!(xyz_sol..., gxyz[1]..., arrowsize=0.1, lengthscale=0.3, arrowcolor=:blue)
+# arrows!(xyz_sol..., gxyz[2]..., arrowsize=0.1, lengthscale=0.3, arrowcolor=:green)
 
 
 

@@ -1,5 +1,3 @@
-
-using Revise
 using MDBM
 using GLMakie
 
@@ -44,7 +42,7 @@ arrows!(xy_sol..., gxyz[1]..., arrowsize = 0.01, lengthscale = 0.1,label = "grad
 ax2=GLMakie.Axis(f[1, 2]; xminorticks = mymdbm.axes[1].ticks, yminorticks  = mymdbm.axes[2].ticks, kwargs...)
 
 #calcuatin the sub-cubes interpolations stored in the mymdbm.ncubes[i].posinterp
-interpsubcubesolution!(mymdbm)
+@time interpsubcubesolution!(mymdbm)
 #extracting the resutls to from the 
 path2points = extract_paths(mymdbm)
 
