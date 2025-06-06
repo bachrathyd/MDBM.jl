@@ -201,18 +201,19 @@ Represent the parameter space in a discretized grid (vector) in `ticks`.
 struct Axis{T} <: AbstractVector{T}
     ticks::Vector{T}
     name
-    function Axis(T::Type, a::AbstractVector, name=:unknown)
-        new{T}(T.(a), name)
+    periodic::Bool
+    function Axis(T::Type, a::AbstractVector, name=:unknown, periodic=false)
+        new{T}(T.(a), name,periodic)
     end
 end
 Base.getindex(ax::Axis{T}, ind) where {T} = ax.ticks[ind]::T
 Base.setindex!(ax::Axis, X, inds...) = setindex!(ax.ticks, X, inds...)
 Base.size(ax::Axis) = size(ax.ticks)
 
-function Axis(a::AbstractVector{T}, name=:unknown) where {T<:Real}
-    Axis(Float64, a, name)
+function Axis(a::AbstractVector{T}, name=:unknown, periodic=false) where {T<:Real}
+    Axis(T, a, name,periodic)
 end
-function Axis(a::AbstractVector{T}, name=:unknown) where {T}
+function Axis(a::AbstractVector{T}, name=:unknown, periodic=false) where {T}
     Axis(T, a, name)
 end
 function Axis(a, name=:unknown)

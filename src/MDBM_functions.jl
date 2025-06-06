@@ -75,12 +75,12 @@ function getcornerval(ncube::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,
     # map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), corner(ncubes, mdbm.T01))
 end
 
-function getcornerval(corers, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
-    funargs = map(x -> ((mdbm.axes))(x...), corers)
+function getcornerval(corners, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    funargs = map(x -> ((mdbm.axes))(x...), corners)
     #mdbm.fc(unique(funargs))#prcomputed if it was not done before
     mdbm.fc.(funargs)
 
-    # map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), corers)
+    # map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), corners)
 end
 
 
@@ -316,7 +316,7 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     # println("precompute the missing elemnts toghether!")
     funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
     if doThreadprecomp && typeof(mdbm.fc) <: MemF  #TODO: It is parallel, but Somehow it is slower!!
-        mdbm.fc(unique(funargs))#prcomputed if it was not done before
+        mdbm.fc(unique!(funargs))#prcomputed if it was not done before
     else
         # mdbm.fc.(unique(funargs))#prcomputed if it was not done before
     end
@@ -542,9 +542,9 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(ncubes, mdbm.T01)))
     if doThreadprecomp && typeof(mdbm.fc) <: MemF #Memoization is used #TODO: It is parallel, but Somehow it is slower!!
         #mdbm.fc(unique(funargs))#prcomputed if it was not done before
-        mdbm.fc(unique(funargs))#prcomputed if it was not done before
+        mdbm.fc(unique!(funargs))#prcomputed if it was not done before
     else
-        mdbm.fc.(unique(funargs))#prcomputed if it was not done before -> necessary for the later threaded for loop
+        mdbm.fc.(unique!(funargs))#prcomputed if it was not done before -> necessary for the later threaded for loop
     end
 
     #As = MVector{Nf + Nc,FT}(undef)
@@ -785,21 +785,21 @@ end
 
 # function generateneighbours(ncubes::Vector{<:NCube},mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where N  where Nf where Nc
 function generateneighbours(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
-    ##TODO: Let the user select the method
-    ##-------all faceing/cornering neightbours----------------
-    # #neighbourind=1:2^length(mdbm.axes) #cornering neightbours also - unnecessary
-    # neighbourind=2 .^(0:(length(mdbm.axes)-1)) .+ 1 #neighbour only on the side
-    # T101=[-mdbm.T01[neighbourind]...,mdbm.T01[neighbourind]...]
-    #
-    # nc_neighbour = Array{typeof(mdbm.ncubes[1])}(undef,0)
-    # NumofNCubes=length(ncubes)
-    # for iT in 1:length(T101)
-    #     Base.append!(nc_neighbour,deepcopy(ncubes))
-    #     for nci in ((1+NumofNCubes*(iT-1)):(NumofNCubes+NumofNCubes*(iT-1)))
-    #         nc_neighbour[nci].corner[:]=nc_neighbour[nci].corner+T101[iT].*nc_neighbour[nci].size
-    #     end
-    # end
-    ##-------all faceing/cornering neightbours----------------
+    #  #TODO: Let the user select the method
+    # #-------all faceing/cornering neightbours----------------
+    #  #neighbourind=1:2^length(mdbm.axes) #cornering neightbours also - unnecessary
+    #  neighbourind=2 .^(0:(length(mdbm.axes)-1)) .+ 1 #neighbour only on the side
+    #  T101=[-mdbm.T01[neighbourind]...,mdbm.T01[neighbourind]...]
+    # 
+    #  nc_neighbour = Array{typeof(mdbm.ncubes[1])}(undef,0)
+    #  NumofNCubes=length(ncubes)
+    #  for iT in 1:length(T101)
+    #      Base.append!(nc_neighbour,deepcopy(ncubes))
+    #      for nci in ((1+NumofNCubes*(iT-1)):(NumofNCubes+NumofNCubes*(iT-1)))
+    #          nc_neighbour[nci].corner[:]=nc_neighbour[nci].corner+T101[iT].*nc_neighbour[nci].size
+    #      end
+    #  end
+    # #-------all faceing/cornering neightbours----------------
 
 
     #-------direcational neightbours----------------
@@ -823,16 +823,60 @@ function generateneighbours(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf
         end
     end
     #-------direcational neightbours----------------
-    filter!(nc -> !(any(nc.corner .< 1) || any((nc.corner + nc.size) .> [length.(mdbm.axes)...])), nc_neighbour)#remove the overhanging ncubes
 
+    wrap_ncube_periodic!.(nc_neighbour, Ref(mdbm.axes))
+
+    #filter!(nc -> !(any(nc.corner .< 1) || any((nc.corner + nc.size) .> [length.(mdbm.axes)...])), nc_neighbour)#remove the overhanging ncubes
+    filter!(nc -> in_range(nc, mdbm.axes), nc_neighbour)
     deleteat!(nc_neighbour, is_sorted_in_sorted(nc_neighbour, ncubes))# delete the ones, whihe were in the list onriginally
     #sort!(nc_neighbour; alg=QuickSort)# it is slower the the default method
     sort!(nc_neighbour)
     unique!(nc_neighbour)
     return nc_neighbour
 end
+"""
+    in_range(nc::NCube{IT,FT,N,Nfc}, axes::Axes{N,AT}) -> Bool
 
+Return `true` if, for every dimension d=1…N,
+  1 ≤ nc.corner[d]  and  nc.corner[d] + nc.size[d] ≤ length(axes[d]).
 
+In other words, this returns `false` whenever any part of `nc` “sticks out”
+beyond the 1…length(axes[d]) grid on dimension d.
+"""
+function in_range(nc::NCube{IT,FT,N,Nfc}, axes::Axes{N,AT}) where {IT,FT,N,Nfc,AT}
+    @inbounds for d in 1:N
+        # 1) If the cube’s “origin” is below 1 in dimension d, it’s invalid:
+        if nc.corner[d] < 1
+            return false
+        end
+        # 2) If the cube’s “far end” (corner[d] + size[d]) exceeds the number of ticks:
+        if nc.corner[d] + nc.size[d] > length(axes[d])
+            return false
+        end
+    end
+    return true
+end
+
+"""
+    wrap_ncube_periodic!(nc::NCube{IT,FT,N,Nfc}, axes::Axes{N,AT})
+
+Modify `nc.corner` in‐place so that each index is wrapped into `1: length(axes[d])`.  
+Equivalently, for each dimension d:
+  nc.corner[d] ↦ mod(nc.corner[d] - 1, length(axes[d])) + 1
+
+This ensures that any out‐of‐bounds corner (e.g. 0 or > length) “wraps around” periodically.
+Returns `nc` for convenience.
+"""
+function wrap_ncube_periodic!(nc::NCube{IT,FT,N,Nfc}, axes::Axes{N,AT}) where {IT,FT,N,Nfc,AT}
+    @inbounds for d in 1:N
+        if axes[d].periodic
+            L = length(axes[d]) - 1   # number of ticks along dimension d
+            # shift corner[d] into 0..L-1 via (corner-1), then mod, then back to 1..L
+            nc.corner[d] = mod(nc.corner[d] - 1, L) + 1
+        end
+    end
+    return nc
+end
 
 """
     checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0)
@@ -1112,7 +1156,7 @@ of size `length(v)`—no recursion, no risk of StackOverflow.
 After this call, `v` is sorted.
 """
 function half_merge_with_buffer!(v::Vector{T}) where T
-    n   = length(v)
+    n = length(v)
     mid = fld(n, 2)
 
     # If the two runs are already disjoint (largest of first half ≤ smallest of second),
