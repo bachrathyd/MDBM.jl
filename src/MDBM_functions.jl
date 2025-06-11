@@ -980,22 +980,34 @@ Refine the `MDBM_Problem` `iteration` times, then perform a neighbour check.
 julia> solve!(mymdbm,4)
 ```
 """
-function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, verbosity=1, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, verbosity=1, doThreadprecomp=true, checkneighbourNum=1) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    #checkneighbourNum = 0 : no neighbour check at all
+    #checkneighbourNum = 1 : check neighbour only once at the end
+    #checkneighbourNum > 1 : check neighbour at every iteration
     if verbosity > 0
         @time begin
             print("  interpolate! :  ")
             @time interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
             for k = 1:iteration
-                print("  $k refine! & interpolate! :  ")
+                if checkneighbourNum > 1
+                    print("  $k refine! & interpolate! & checkneighbour!:  ")
+                else
+                    print("  $k refine! & interpolate! :  ")
+                end
                 @time begin
                     refine!(mdbm)
                     interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+                    if checkneighbourNum > 1
+                        checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+                    end
                 end
             end
-            print("           checkneighbour! :  ")
-            @time checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
-            print("              interpolate! :  ")
-            @time interpolate!(mdbm, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+            if checkneighbourNum == 1
+                print("           checkneighbour! :  ")
+                @time checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+            end
+            #print("              interpolate! :  ")#not need
+            #@time interpolate!(mdbm, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
             print("total time:  :  ")
         end
         return mdbm
@@ -1004,9 +1016,13 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::I
         for k = 1:iteration
             refine!(mdbm)
             interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+            if checkneighbourNum > 1
+                checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+            end
         end
-        checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
-        interpolate!(mdbm, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+        if checkneighbourNum == 1
+            checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+        end
         return mdbm
     end
 end
