@@ -253,7 +253,7 @@ scatter!(ax, xyzr_sol[[1, 2, 4]]..., markersize=6, color=xyzr_sol[3])
 
 #--------------------------- Sub-cube interpolation----------------
 println("Calculation the interpolated values in the sub-cubes (faces of the n-cubes)")
-@time interpsubcubesolution!(mdbm4d)
+@time interpsubcubesolution!(mdbm4d) #~40 sec.
 #extracting the resutls to from the 
 path2points = extract_paths(mdbm4d)
 

@@ -1,97 +1,74 @@
 using MDBM
-#using GLMakie
-#GLMakie.closeall()
-#GLMakie.activate!(; title="3 parameters, codimension 1")
+using GLMakie
+GLMakie.closeall()
+GLMakie.activate!(; title="3 parameters, codimension 1")
 #-----------------------------
 
 #This type of type definitsion is an overkill here!
-function foo_par3_codim1(x::Float64, y::Float64, z::Float64)::Float64
-    x^2.0 + y^2.0 + z^2.0 - 2.0^2.0::Float64
+#function foo_par3_codim1(x::Float64, y::Float64, z::Float64)::Float64
+function foo_par3_codim1(x, y, z)
+    x^2.0 + y^2.0 + z^2.0 - 2.0^2.0
 end
 
 # constraint - calculate only the points where the constraint is satisfied (e.g.: on the positiev side)
-function c(x::Float64, y::Float64, z::Float64)::Float64
+#function c(x::Float64, y::Float64, z::Float64)::Float64
+function c(x, y, z)
     x^2.0 + y^2.0 - 0.5^2.0
 end
 
 
 mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0], constraint=c)
-solve!(mymdbm, 2, doThreadprecomp=false, verbosity=1)
+solve!(mymdbm, 4, doThreadprecomp=false, verbosity=1);
+ 
+ f = Figure(size=(1000, 600))
+ ax1 = GLMakie.Axis3(f[1, 1])
+ 
+ xyz_sol = getinterpolatedsolution(mymdbm)
+ scatter!(ax1, xyz_sol..., markersize=15, color=:red, marker='x', strokewidth=3, label="solution")
+ 
+ # show the points where the function is evaluated
+ ## xyz_val = getevaluatedpoints(mymdbm)
+ ## fval = getevaluatedfunctionvalues(mymdbm)
+ ## scatter!(xyz_val..., color=sign.(fval), label="evaluated")
+ ## 
+ ## # connecting and plotting the "mindpoints" of the n-cubes
+ ## DT1 = connect(mymdbm)
+ ## edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)], fill(NaN, length(DT1))])'[:] for i_sol in xyz_sol]
+ ## lines!(edge2plot_xyz..., linewidth=5, label="midpoints solution connected")
+ ## 
+ ## # #plotting the gradintes
+ ## gxyz = getinterpolatedgradient(mymdbm.ncubes, mymdbm)
+ ## arrows!(xyz_sol..., gxyz[1]..., arrowsize=0.1, lengthscale=0.1, label="gradient")#    arrowcolor = strength, linecolor = strength)
+ ## 
+ 
+ 
+ 
+ 
+ #--------------------------- Sub-cube interpolation----------------
+ ax2 = GLMakie.Axis3(f[1, 2])
+ #calcuatin the sub-cubes interpolations stored in the mymdbm.ncubes[i].posinterp
+ interpsubcubesolution!(mymdbm)
+ #extracting the resutls to from the 
+ path2points = extract_paths(mymdbm);
+ 
+ #extracting the unique points and plotting
+ puniq = unique(collect(Iterators.flatten(Iterators.flatten(path2points))));
+ scatter!(ax2, getindex.(puniq, 1), getindex.(puniq, 2), getindex.(puniq, 3), markersize=5, color=:green, label="subface - solution")
+ 
+ 
+ 
+ #exctracing the simplexes for each ncube
+ flatened_path2points = collect(Iterators.flatten(path2points))
+ #eliminating the points with less than 2 points (caused by fininte precision)
+ true_truflatened_path2points = flatened_path2points[length.(flatened_path2points).==3]
+ 
+ 
+ #plotting the lines between the points
+ n_faces = reshape(1:(3*length(true_truflatened_path2points)), (3, length(true_truflatened_path2points)))'
+ vertices_mat = hcat(Iterators.flatten(true_truflatened_path2points)...)
+ mesh!(vertices_mat, n_faces, alpha=0.5, label="subface - local simplex")
 
-
-
-
-function foo(n, b=true)
-    mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0], constraint=c, memoization=b)
-    solve!(mymdbm, n, doThreadprecomp=true, verbosity=0)
-end
-
-for kk in 1:6
-    println(kk)
-    @time foo(kk, true)#number of refinements - increase it slightly to see smoother results 
-end
-
-
-# 5
-#   1.877017 seconds (35.08 M allocations: 1.699 GiB, 27.85% gc time, 0.00% compilation time)
-# 6
-#  10.985584 seconds (162.68 M allocations: 7.842 GiB, 20.06% gc time, 0.00% compilation time)
-
-##
-5+5
-#foo(2,false)
-@profview foo(4);
-
-##  using BenchmarkTools
-##  @benchmark foo($5)
-##  f = Figure(size=(1000, 600))
-##  ax1 = GLMakie.Axis3(f[1, 1])
-##  
-##  xyz_sol = getinterpolatedsolution(mymdbm)
-##  scatter!(ax1, xyz_sol..., markersize=15, color=:red, marker='x', strokewidth=3, label="solution")
-##  
-##  # show the points where the function is evaluated
-##  xyz_val = getevaluatedpoints(mymdbm)
-##  fval = getevaluatedfunctionvalues(mymdbm)
-##  scatter!(xyz_val..., color=sign.(fval), label="evaluated")
-##  
-##  # connecting and plotting the "mindpoints" of the n-cubes
-##  DT1 = connect(mymdbm)
-##  edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)], fill(NaN, length(DT1))])'[:] for i_sol in xyz_sol]
-##  lines!(edge2plot_xyz..., linewidth=5, label="midpoints solution connected")
-##  
-##  # #plotting the gradintes
-##  gxyz = getinterpolatedgradient(mymdbm.ncubes, mymdbm)
-##  arrows!(xyz_sol..., gxyz[1]..., arrowsize=0.1, lengthscale=0.1, label="gradient")#    arrowcolor = strength, linecolor = strength)
-##  
-##  
-##  
-##  
-##  
-##  #--------------------------- Sub-cube interpolation----------------
-##  ax2 = GLMakie.Axis3(f[1, 2])
-##  #calcuatin the sub-cubes interpolations stored in the mymdbm.ncubes[i].posinterp
-##  interpsubcubesolution!(mymdbm)
-##  #extracting the resutls to from the 
-##  path2points = extract_paths(mymdbm)
-##  
-##  #extracting the unique points and plotting
-##  puniq = unique(collect(Iterators.flatten(Iterators.flatten(path2points))))
-##  scatter!(ax2, getindex.(puniq, 1), getindex.(puniq, 2), getindex.(puniq, 3), markersize=10, color=:green, label="subface - solution")
-##  
-##  
-##  
-##  #exctracing the simplexes for each ncube
-##  flatened_path2points = collect(Iterators.flatten(path2points))
-##  #eliminating the points with less than 2 points (caused by fininte precision)
-##  true_truflatened_path2points = flatened_path2points[length.(flatened_path2points).==3]
-##  
-##  
-##  #plotting the lines between the points
-##  n_faces = reshape(1:(3*length(true_truflatened_path2points)), (3, length(true_truflatened_path2points)))'
-##  vertices_mat = hcat(Iterators.flatten(true_truflatened_path2points)...)
-##  mesh!(vertices_mat, n_faces, alpha=0.5, label="subface - local simplex")
-##  
+ 
 ##  
 ##  display(GLMakie.Screen(), f)
 ##  axislegend(ax1)
