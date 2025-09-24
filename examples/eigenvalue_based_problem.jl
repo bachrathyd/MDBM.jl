@@ -6,12 +6,11 @@ function fooeig(x)
        mymx[1,2]=x+5;
        abs(eigs(mymx, nev = 2)[1][1])-3
 end
-eig_problem=MDBM_Problem(fooeig,[Axis(-10:10)])
-
+eig_problem=MDBM_Problem(fooeig,[-10.0:10.0])
 
 println(" X solution  //   Function val")
 for k=1:12
-solve!(eig_problem,1)
+solve!(eig_problem,1, doThreadprecomp=false, verbosity=0)
 Xsol=getinterpolatedsolution(eig_problem)
 print(Xsol[1])
 print("  //   ")
