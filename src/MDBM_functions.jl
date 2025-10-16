@@ -107,11 +107,50 @@ function T01maker(valk::Val{kdim}) where {kdim}
         for x in 0:(2^kdim-1)])
 end
 
-function T11pinvmaker(valk::Val{kdim}) where {kdim}
-    T11pinv = ([isodd(x ÷ (2^y)) for y in 0:kdim, x in 0:(2^kdim-1)] * 2.0 .- 1.0) / (2^kdim)
-    SMatrix{kdim + 1,2^kdim}(T11pinv)
+# function T11pinvmaker(valk::Val{kdim}) where {kdim}
+#     T11pinv = ([isodd(x ÷ (2^y)) for y in 0:kdim, x in 0:(2^kdim-1)] * 2.0 .- 1.0) / (2^kdim)
+#     SMatrix{kdim + 1,2^kdim}(T11pinv)
+# end
+
+
+function T11pinvmaker(::Val{N}, ::Type{FT}=Float64) where {N,FT}
+    m  = 1 << N                     # 2^N
+    T  = MMatrix{N+1, m, FT}(undef)
+    @inbounds for k in 0:m-1
+        # rows 1..N: ±1 patterns for ξ_d
+        for d in 1:N
+            T[d, k+1] = ((k >> (d-1)) & 0x01) == 1 ? FT(1) : FT(-1)
+        end
+        # last row: constant = -1
+        T[N+1, k+1] = FT(-1)
+    end
+    T ./= FT(m)                     # scale by 1/2^N
+    return SMatrix{N+1, m, FT}(T)
 end
 
+
+"""
+    T11maker(::Val{N}, ::Type{FT}=Float64) -> SMatrix{2^N, N+1, FT}
+
+Builds the design matrix `T11` whose pseudoinverse gives your existing `T11pinv`
+(i.e. last column = -1 instead of +1).  
+Corner order: ξ₁ toggles fastest (lexicographic binary order).
+"""
+function T11maker(::Val{N}, ::Type{FT}=Float64) where {N,FT}
+    m = 1 << N   # number of cube corners = 2^N
+    M = MMatrix{m, N+1, FT}(undef)
+
+    @inbounds for k in 0:m-1
+        # columns 1..N: ±1 pattern for each ξ_d
+        for d in 1:N
+            M[k+1, d] = ((k >> (d-1)) & 0x01) == 1 ? FT(1) : FT(-1)
+        end
+        # last column: constant = -1  (your convention)
+        M[k+1, N+1] = FT(-1)
+    end
+
+    return SMatrix{m, N+1, FT}(M)
+end
 
 # #TODO : deprecated - same results can be achieved with the generate_sub_faces function
 # """
@@ -248,7 +287,7 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, md
             #print("$Nfree ok:")
             #@show face
 
-            #push!(posall_tree.subpoints, PositionTree(getinterpolatedsolution(posinterp, corner, mdbm.axes)))
+            #push!(posall_tree.subpoints, PositionTree(getinterpolatedsolution(posinterp, corner,size, mdbm.axes)))
             push!(posall_tree.subpoints, PositionTree(posinterp))
             if Nfree > Nf
                 edges, all_edge_fixed_dims = generate_sub_faces(face, fixdim)
@@ -266,8 +305,8 @@ end
 function extract_paths_local(nc::NCube)
     extract_paths(nc.posinterp)
 end
-function extract_paths(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
-    [getinterpolatedsolution.(posloc, Ref(nc.corner), Ref(mdbm.axes)) for posloc in extract_paths_local(nc)]
+function extract_paths(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+    [getinterpolatedsolution.(posloc, Ref(nc.corner),Ref(nc.size), Ref(mdbm.axes)) for posloc in extract_paths_local(nc)]
 end
 
 function extract_paths(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
@@ -339,7 +378,7 @@ function issingchange(FunTupleVector::AbstractVector, Nf::Integer, Nc::Integer):
     ])#check for all condition
 end
 
-function _interpolate!(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, ::Type{Val{0}}, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{0}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     # println("precompute the missing elemnts toghether!")
     funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
     if doThreadprecomp && typeof(mdbm.fc) <: MemF  #TODO: It is parallel, but Somehow it is slower!!
@@ -497,7 +536,7 @@ function fit_hyperplane!(FunTupleVector, ::Val{N}, ::Val{Nf}, ::Val{Nc}, T11pinv
         end
 
         #end
-        grad = ns
+        grad .= ns
         #for c---------------------
     else
         posinterp[:] .= 1000.0#put it outside the cube!
@@ -566,8 +605,58 @@ function fit_hyperplane(FunTupleVector, ::Val{N}, ::Val{Nf}, ::Val{Nc}, FT, T11p
     end
     return posinterp, grad
 end
+using LinearAlgebra
 
-function _interpolate!(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+"""
+    ncube_error_vector!(out, nc; usecols = 1:Nf_like)
+
+Compute the perpendicular error vector
+    err = (I - P_col(gradient[:,usecols])) * (parentmidpointposinterp - posinterp.p)
+where `P_col(G) = G * (G \\ ·)` is the orthogonal projector onto the span of the
+selected gradient columns. All in local ξ-coordinates.
+
+- `out` must be length N (will be overwritten).
+- `usecols` lets you choose which columns (e.g. only the Nf equation columns).
+Returns `out`.
+"""
+function ncube_error_vector!(
+    out::AbstractVector{FT},
+    nc::NCube{IT,FT,N,Nfc};
+    usecols = 1:size(nc.gradient,2),
+) where {IT,FT,N,Nfc}
+
+    @inbounds begin
+        # delta := parent ξ  −  child ξ
+        for d in 1:N
+            out[d] = nc.parentmidpointposinterp[d] - nc.posinterp.p[d]
+        end
+    end
+
+    # nothing to project onto
+    ncols = length(usecols)
+    ncols == 0 && return out
+
+    # View the chosen gradient block (N × ncols)
+    G = @view nc.gradient[:, usecols]
+
+    # proj = G * (G \ delta)  (least-squares projection onto Col(G))
+    proj = G * (G \ out)
+
+    # err = delta − proj
+    @inbounds for d in 1:N
+        out[d] = proj[d]
+    end
+    return out
+end
+
+# convenience wrapper returning an MVector (if you prefer a non-bang version)
+function ncube_error_vector(nc::NCube{IT,FT,N,Nfc}; usecols = 1:size(nc.gradient,2)) where {IT,FT,N,Nfc}
+    out = MVector{N,eltype(nc.parentmidpointposinterp)}(undef)
+    ncube_error_vector!(out, nc; usecols=usecols)
+    return out
+end
+
+function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     # println("precompute the missing elemnts toghether!")
     funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(ncubes, mdbm.T01)))
     if doThreadprecomp && typeof(mdbm.fc) <: MemF #Memoization is used #TODO: It is parallel, but Somehow it is slower!!
@@ -635,7 +724,9 @@ julia> refine!(mymdbm,[1,1,2])
 """
 function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; directions::Vector{T}=collect(Int64, 1:N)) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,Nfc,t01T,t11T,aT}
     doubling!(mdbm, directions)
-    refinencubes!(mdbm, directions)
+    refinencubes!(mdbm.ncubes,1:size(mdbm.ncubes,1), directions)
+    #println("orig")
+    #refinencubes!(mdbm, directions)
     return nothing
 end
 
@@ -661,20 +752,124 @@ function doubling!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, direc
 end
 
 """
-     refinencubes!(ncubes::Vector{<:NCube}, directions::Vector{T})
+    refinencubes!(
+        ncubes::Vector{NC},
+        indices::AbstractVector{<:Integer},
+        directions::AbstractVector{<:Integer},
+    ) where {NC<:NCube}
 
-Halving the `ncubes` along the provided `directions`.
+Refine only the cubes at the given `indices`. For each `dir` in `directions`,
+halve `size[dir]` of each selected cube and append a shifted duplicate whose
+`corner[dir] += (new) size[dir]`. After appending, merge the two sorted runs
+(`old` and `new`) with an O(n) buffer merge.
+
+Assumes `ncubes` is sorted before the call and that the newly created cubes
+are internally sorted (they will be if `indices` is sorted).
+"""
+function refinencubes!(
+    ncubes::Vector{NC},
+    indices::AbstractVector{<:Integer},
+    directions::AbstractVector{<:Integer},
+) where {IT,FT,N,Nfc,NC<:NCube{IT,FT,N,Nfc}}
+
+    # keep initial left run fixed until the very end
+    old_n = length(ncubes)
+
+    # work on a sorted, growing list of indices we refine at each step
+    idxs = sort!(collect(indices))
+
+    # ---- seed parent midpoint (in parent ξ) once for all selected parents ----
+    @inbounds for i in idxs
+        ncubes[i].parentmidpointposinterp .= ncubes[i].posinterp.p
+    end
+
+
+    @inbounds for dir in directions
+        @assert 1 ≤ dir ≤ N
+        m = length(idxs)
+
+        # 1) halve sizes of all currently selected cubes along this dir
+        for t in 1:m
+            i = idxs[t]
+            # if IT is not guaranteed integer, use `/= 2` (or `÷= 2` for integer div)
+            ncubes[i].size[dir] = ncubes[i].size[dir] ÷ 2
+        end
+
+        # 2) append shifted duplicates directly into the tail
+        start_tail = length(ncubes) + 1
+        resize!(ncubes, length(ncubes) + m)
+
+        for t in 1:m
+            i   = idxs[t]
+            old = ncubes[i]
+
+            # --- lower child (in-place): update mapped parent midpoint component for this dir
+            old.parentmidpointposinterp[dir] = FT(2) * old.posinterp.p[dir] + FT(1)
+            old.posinterp.p .= old.parentmidpointposinterp
+
+
+            
+            # start from parent's mapped vector so far, then set current dir for the upper child
+            parentmp2 = MVector{N,FT}(old.parentmidpointposinterp)
+            parentmp2 .= old.parentmidpointposinterp
+            parentmp2[dir] -= FT(2)# = FT(2) * par.posinterp.p[dir] - FT(1)
+
+            corner2 = MVector{N,IT}(old.corner)
+            corner2[dir] += old.size[dir]              # shift by NEW (halved) size
+            size2   = MVector{N,IT}(old.size)
+            pos2    = PositionTree(parentmp2)       # copy the prevous position tree
+            grad2   = MMatrix{N,Nfc,FT}(undef)         # fresh gradient
+
+
+            ncubes[start_tail + (t-1)] =
+                NCube{IT,FT,N,Nfc}(corner2, size2, pos2, old.bracketingncube, grad2,deepcopy(parentmp2))
+        end
+
+        # 3) expand the index set to include the just-appended tail block
+        #    so the next direction refines both originals and the new ones.
+        append!(idxs, start_tail:(start_tail + m - 1))
+        # idxs stays sorted if each appended block is ≥ previous (it is).
+    end
+
+    # sort!(ncubes) # full sort (faster for small arrays)
+
+    # After all directions: right run = tail (old_n+1 : end).
+    # Sort ONLY the tail, then merge two sorted runs with one buffer.
+    if length(ncubes) > old_n
+        #TODO: the origal indexes and the segments of the tail might be already sorted, so we could do a k-way merge here
+        sort!(view(ncubes, old_n+1:length(ncubes)))              # in-place tail sort
+        sort_sort_merge_with_buffer!(ncubes, old_n)               # merge left+right runs
+    end
+
+    return ncubes
+end
+
+
+
+"""
+     refinencubes!(mdbm::MDBM_Problem, directions::Vector{T})
+
+Halving the `ncubes` along the provided `directions` (many multiple times if a direction is repeated).
 
 # Examples
 ```jldoctest
-julia> refinencubes!(mymdbm.ncubes)
-julia> refinencubes!(mymdbm.ncubes,mymdbm,[1,2])
+julia> refinencubes!(mymdbm)
+julia> refinencubes!(mymdbm,[1,1,2])
 ```
 """
-function refinencubes!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, directions::Vector{T}) where {T<:Integer,fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT} #where t01T # where IT where FT where N
+# {IT,FT,N,Nfc} where {IT,FT,N,Nfc} 
+#function refinencubes!(ncubes::Vector{<:NCube{IT,FT,N,Nfc}}, directions::Vector{T}) where {T<:Integer,IT,FT,N,Nfc} #where t01T # where IT where FT where N
+function refinencubes!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT},directions::AbstractVector{<:Integer}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT} #where t01T # where IT where FT where N
+    # bring the bracketing cubes locally
     ncubes = mdbm.ncubes
-    sizehint!(ncubes, (length(ncubes) * 2^length(directions)) * 1.2) # preallocate memory for the new ncubes, and some overhead, to have extra space for neighbour chacking
+
+    # compute “Nfc” once (number of equations incl. constraints)
+    constNfc = Nf + Nc   # value-level constant for this method instance
+
+
+    sizehint!(ncubes, (length(ncubes) * 2^length(directions)) * 1.2) # preallocate memory for the new ncubes, and some overhead, to have extra space fo neighbour chacking
     @inbounds for dir in directions
+        #println("Refining in direction $dir, number of ncubes: ", length(ncubes))
         for nc in ncubes
             nc.size[dir] /= 2
         end
@@ -699,9 +894,9 @@ function refinencubes!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, d
             size2 = MVector{N,IT}(old.size)
             # 3) initialize a brand‐new PositionTree (all zeros) and gradient matrix:
             pos2 = PositionTree(zeros(MVector{N,FT}))        # or whatever default you need
-            grad2 = MMatrix{N,Nfc,FT}(undef)
+            grad2 = MMatrix{N,constNfc,FT}(undef)
             # 4) construct the new cube with the same bracketing flag (or set it if desired):
-            ncubes[i+NumofNCubes] = NCube{IT,FT,N,Nfc}(corner2, size2, pos2, true, grad2)
+            ncubes[i+NumofNCubes] = NCube{IT,FT,N,Nf+Nc}(corner2, size2, pos2, true, grad2)
         end
         # finally, append all the new ones at once:
 
@@ -710,15 +905,26 @@ function refinencubes!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, d
         #append!(ncubes, new_all_cubes) # no need for sort!-but slower, do to the memory allcoation
 
         #append!(ncubes, new_cubes)
-
-        half_merge_with_buffer!(ncubes)
+       sort_sort_merge_with_buffer!(ncubes)
 
     end
     #sort!(ncubes; alg=QuickSort)
     return nothing
 end
 
-
+"""
+    getscaled_local_point(nc::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
+    
+"""
+function getscaled_local_point(p,nc::NCube{IT,FT,N,Nfc}, axes::Axes{N,aT}) where {IT,FT,N,Nfc,aT}
+    @inbounds [
+        (typeof(axes[i].ticks).parameters[1])(
+            (
+               ( axes[i].ticks[nc.corner[i]] -axes[i].ticks[nc.corner[i]+nc.size[i]] )*
+               p[i]
+             ))
+        for i in 1:length(axes)]
+end
 
 """
     getinterpolatedsolution(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT})
@@ -758,10 +964,10 @@ function getinterpolatedsolution(nc::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,
         for i in 1:length(mdbm.axes)]
 end
 
-function getinterpolatedsolution(posinterp, corner, axes::Axes{N,aT}) where {N,aT}
+function getinterpolatedsolution(posinterp, corner,size, axes::Axes{N,aT}) where {N,aT}
     @inbounds [
         (typeof(axes[i].ticks).parameters[1])((axes[i].ticks[corner[i]] * (1.0 - (posinterp[i] + 1.0) / 2.0) +
-                                               axes[i].ticks[corner[i]+1] * ((posinterp[i] + 1.0) / 2.0)))#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
+                                               axes[i].ticks[corner[i]+size[i]] * ((posinterp[i] + 1.0) / 2.0)))#::Vector{typeof(mdbm.axes[i].ticks).parameters[1]}
         for i in 1:length(axes)]
 end
 
@@ -786,7 +992,7 @@ function getinterpolatedgradient(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_
 end
 
 
-function getinterpolatedgradient(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+function getinterpolatedgradient(nc::NCube, mdbm::MDBM_Problem)# where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
     @inbounds [[
         (mdbm.axes[i].ticks[nc.corner[i]] * (1.0 .- (nc.gradient[i, fi] .+ 1.0) ./ 2.0) +
          mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] * ((nc.gradient[i, fi] .+ 1.0) ./ 2.0))
@@ -940,7 +1146,7 @@ It works only if the dimension of the solution object is larger the zero (the ma
     - `interpolationorder::Int=0`: interpolation order method of the neighbours checked
     - `maxiteration::Int=0~: the max number of steps in the 'continuation-like' exploring. If zero, then infinity steps are allowed
 """
-function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}#only for unite size cubes
+function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}#only for unite size cubes
     if isempty(mdbm.ncubes)
         println("There is no bracketing n-cubes to check!")
     else
@@ -1348,76 +1554,27 @@ function sequential_insert!(v::Vector{T}, x::T; lt=isless) where T
 end
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 """
-    half_merge_with_buffer!(v::Vector{T})
+    sort_sort_merge_with_buffer!(v::Vector{T}, mid::Int; lt=isless)
 
-Assume that `v[1:mid]` and `v[mid+1:end]` are each already sorted,
-where `mid = fld(length(v), 2)`.  This will merge them so that
-`v[1:end]` becomes fully sorted, using a single auxiliary buffer
-of size `length(v)`—no recursion, no risk of StackOverflow.
-
-After this call, `v` is sorted.
+Assumes `v[1:mid]` and `v[mid+1:end]` are each sorted by `lt`.
+Merges them into a single globally sorted vector in place using a one-time buffer.
 """
-function half_merge_with_buffer!(v::Vector{T}) where T
+
+function sort_sort_merge_with_buffer!(v::Vector{T}, mid = fld(length(v), 2); lt=isless) where {T}
     n = length(v)
-    mid = fld(n, 2)
-
-    # If the two runs are already disjoint (largest of first half ≤ smallest of second),
-    # we’re done immediately:
-    if v[mid] ≤ v[mid+1]
+    (0 < mid < n) || return v
+    @inbounds if !lt(v[mid+1], v[mid])  # already ordered
         return v
     end
-
-    # 1) Allocate a temporary buffer once (same element type and length as v)
     tmp = similar(v)
-
-    # 2) Standard merge of two sorted runs into tmp:
-    i = 1          # pointer in run1  (1 ≤ i ≤ mid)
-    j = mid + 1    # pointer in run2  (mid+1 ≤ j ≤ n)
-    k = 1          # write‐pointer in tmp
-
-    # Merge until one run is exhausted:
-    while i ≤ mid && j ≤ n
-        if v[i] ≤ v[j]
-            tmp[k] = v[i]
-            i += 1
-        else
-            tmp[k] = v[j]
-            j += 1
-        end
+    i, j, k = 1, mid+1, 1
+    @inbounds while i ≤ mid && j ≤ n
+        if lt(v[j], v[i]); tmp[k]=v[j]; j+=1 else tmp[k]=v[i]; i+=1 end
         k += 1
     end
-
-    # Copy any leftovers from run1:
-    while i ≤ mid
-        tmp[k] = v[i]
-        i += 1
-        k += 1
-    end
-
-    # Copy any leftovers from run2:
-    while j ≤ n
-        tmp[k] = v[j]
-        j += 1
-        k += 1
-    end
-
-    # 3) Copy the merged result back into v:
-    @inbounds for idx in 1:n
-        v[idx] = tmp[idx]
-    end
-
+    @inbounds while i ≤ mid; tmp[k]=v[i]; i+=1; k+=1; end
+    @inbounds while j ≤ n;   tmp[k]=v[j]; j+=1; k+=1; end
+    @inbounds @simd for t in 1:n; v[t]=tmp[t]; end
     return v
 end

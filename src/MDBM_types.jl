@@ -266,6 +266,7 @@ struct NCube{IT,FT,N,Nfc}
     posinterp::PositionTree{N,FT}#relative coordinate within the cube "(-1:1)" range
     bracketingncube::Bool
     gradient::MMatrix{N,Nfc,FT}#relative coordinate within the cube "(-1:1)" range
+    parentmidpointposinterp::MVector{N,FT}#relative coordinate within the local cube "(-1:1)" range
     #gradient ::MVector{Nfc,MVector{N,FT}}
     # curvnorm::Vector{T}
 end
