@@ -260,6 +260,7 @@ struct NCube{IT,FT,N,Nfc}
     posinterp::PositionTree{N,FT}#relative coordinate within the cube "(-1:1)" range
     bracketingncube::Bool
     gradient::MMatrix{N,Nfc,FT}#relative coordinate within the cube "(-1:1)" range
+    parentmidpointposinterp::MVector{N,FT}#relative coordinate within the local cube "(-1:1)" range
     #gradient ::MVector{Nfc,MVector{N,FT}}
     # curvnorm::Vector{T}
 end
@@ -319,7 +320,7 @@ function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc, IT=Int, FT
     Nfc = Nf + Nc
     MDBM_Problem{fcT,N,Nf,Nc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
         sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
-            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:])
+            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef),MVector{N,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:])
             , T01, T11pinv)
 end
 

@@ -6,11 +6,11 @@ GLMakie.activate!(;title = "2 parameters, codimension 1")
 #-----------------------------
 
 function foo_par2_codim1(x, y)
-    x^4.0 + y^3.0 - 2.0^2.0
+    x^4.0 + y^3.0 - 2.0^2.0+x*y
     #((x^2.0 + y) - 1.0^2.0)*x #TODO: test with this function, too
 end
 mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
-@time solve!(mymdbm, 5)#number of refinements - increase it slightly to see smoother results 
+@time solve!(mymdbm, 3)#number of refinements - increase it slightly to see smoother results 
 
 f = Figure()
 #show the final resolution of the grid based on the minorticks
@@ -32,9 +32,9 @@ edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)
 lines!(edge2plot_xyz..., linewidth=5,label = "midpoints solution connected")
 
 
-#plotting the gradintes
-gxyz=getinterpolatedgradient(mymdbm.ncubes,mymdbm)
-arrows!(xy_sol..., gxyz[1]..., arrowsize = 0.01, lengthscale = 0.1,label = "gradient")#    arrowcolor = strength, linecolor = strength)
+# #plotting the gradintes
+# gxyz=getinterpolatedgradient(mymdbm.ncubes,mymdbm)
+# arrows!(xy_sol..., gxyz[1]..., arrowsize = 0.01, lengthscale = 0.1,label = "gradient")#    arrowcolor = strength, linecolor = strength)
 
 
 
