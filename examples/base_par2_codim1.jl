@@ -11,7 +11,10 @@ function foo_par2_codim1(x, y)
 end
 mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
 @time solve!(mymdbm, 3)#number of refinements - increase it slightly to see smoother results 
+<<<<<<< HEAD
     
+=======
+>>>>>>> 5105594 (Consecpt testing, Almost working)
 
 # Plotting the results
 f = Figure()
@@ -48,6 +51,7 @@ lines!(edge2plot_xyz..., linewidth=5,label = "midpoints solution connected")
 # #plotting the gradintes
 # gxyz=getinterpolatedgradient(mymdbm.ncubes,mymdbm)
 # arrows!(xy_sol..., gxyz[1]..., arrowsize = 0.01, lengthscale = 0.1,label = "gradient")#    arrowcolor = strength, linecolor = strength)
+<<<<<<< HEAD
 
 # Recreate with shifted contour level and axes
 
@@ -58,6 +62,8 @@ mymdbm_shifted=recreate(mymdbm, contour_level_fc=[5.5,nothing],axes_new=[-3.1:3.
 xy_sol = getinterpolatedsolution(mymdbm_shifted)
 scatter!(xy_sol..., markersize = 15, color = :blue,marker ='x',strokewidth=3,label = "solution")
 
+=======
+>>>>>>> 5105594 (Consecpt testing, Almost working)
 
 
 
