@@ -71,22 +71,28 @@ f
 #---------------------------- testing the checkneighbourNum -------------------
 # This section tests the effect of different `checkneighbourNum` values on the solution.
 f_test = Figure(size=(900, 600))
-label_test= ["no neighbour check at all","(default) check neighbour only once at the end, in some case it is slower","check neighbour at every iteration"]
+label_test = ["no neighbour check at all", "(default) check neighbour only once at the end, in some case it is slower", "check neighbour at every iteration"]
 for checkneighbourNum_test in [0, 1, 2]
     turning_mdbm_prob_test = MDBM_Problem(char_eq, [Ω_axis, w_axis, ωc_axis])
-        time_test = @elapsed solve!(turning_mdbm_prob_test, 4, verbosity=1, checkneighbourNum=checkneighbourNum_test)# check neighbour at every iteration
+    time_test = @elapsed solve!(turning_mdbm_prob_test, 4, checkneighbourNum=checkneighbourNum_test)# check neighbour at every iteration
 
     # Extract the interpolated solution (3 × N array of [Ω; w; θ])
-    Ω_sol, w_sol, ωc_sol = getinterpolatedsolution(turning_mdbm_prob_test)
+   local Ω_sol, w_sol, ωc_sol = getinterpolatedsolution(turning_mdbm_prob_test)
 
 
     # 3D scatter of the stability boundary in (Ω, w, ωc)
-    ax = Axis3(f_test[1, checkneighbourNum_test+1];
+    ax_loc = Axis3(f_test[1, checkneighbourNum_test+1];
         xlabel="Ω (ω_s/ω_n)",
         ylabel="w (axial depth)",
         zlabel="ωc (chatter freq.)",
-        title=label_test[checkneighbourNum_test+1]*" \n checkneighbourNum_test: $checkneighbourNum_test, time: $(round(time_test, digits=2))s")
-    scatter!(ax, Ω_sol, w_sol, ωc_sol;
+        title=label_test[checkneighbourNum_test+1] * " \n checkneighbourNum_test: $checkneighbourNum_test, time: $(round(time_test, digits=2))s")
+    scatter!(ax_loc, Ω_sol, w_sol, ωc_sol;
         markersize=5, color=:tomato, label="roots")
+
+    xyz_val = getevaluatedpoints(turning_mdbm_prob_test)
+    fval = getevaluatedfunctionvalues(turning_mdbm_prob_test)
+
+    scatter!(ax_loc,xyz_val..., markersize=3, label="evaluated")
+
 end
 f_test
