@@ -10,7 +10,7 @@ end
 
 
 """
-    axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[])
+    axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[])
 
 Extend parameter space of the selected Axis by prepend and append the grid.
 
@@ -22,7 +22,7 @@ extending the second parameter of the mdbm problem:
 julia> axesextend!(mymdbm,2,prepend=-6.2:0.05:-2.2,append=2.2:0.2:3);
 ```
 """
-function axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[]) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[]) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     preplength = length(prepend)
     if preplength > 0
         prepend!(mdbm.axes[axisnumber].ticks, prepend)
@@ -47,14 +47,14 @@ function corner(ncubes::Vector{<:NCube}, T01) #{IT,FT,N,Nfc} where {IT,FT,N,Nfc}
     # [nc.corner .+ nc.size .* T for nc in ncubes for T in T01]
 end
 
-# function corner(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})::Vector{Vector{SVector}}  where fcT where N where Nf where Nc
-function corner(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+# function corner(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT})::Vector{Vector{SVector}} 
+function corner(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     [corner(nc, mdbm.T01) for nc in mdbm.ncubes]
 end
 
 
 
-function getcornerval(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}#get it for all
+function getcornerval(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}#get it for all
     #getcornerval.(mdbm.ncubes,Ref(mdbm))
 
     funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
@@ -64,7 +64,7 @@ function getcornerval(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where 
     #map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
 end
 
-function getcornerval(ncube::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT,Nfc}
+function getcornerval(ncube::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #PostionsVectors=(mdbm.axes.(corner(nc,mdbm.T01)))
     # (mdbm.fc).( (mdbm.axes).(corner(nc,mdbm.T01)) )
 
@@ -75,7 +75,7 @@ function getcornerval(ncube::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,
     # map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), corner(ncubes, mdbm.T01))
 end
 
-function getcornerval(corners, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function getcornerval(corners, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     funargs = map(x -> ((mdbm.axes))(x...), corners)
     #mdbm.fc(unique(funargs))#prcomputed if it was not done before
     mdbm.fc.(funargs)
@@ -163,20 +163,20 @@ end
 
 
 
-function interpsubcubesolution!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function interpsubcubesolution!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     for nc in mdbm.ncubes
         interpsubcubesolution!(nc, mdbm, normp=normp, ncubetolerance=ncubetolerance)
     end
     return nothing
 end
-function interpsubcubesolution!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function interpsubcubesolution!(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     for nc in ncubes
         interpsubcubesolution!(nc, mdbm, normp=normp, ncubetolerance=ncubetolerance)
     end
     return nothing
 end
 
-function interpsubcubesolution!(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function interpsubcubesolution!(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
 
     fixed_dims = Vector{Tuple{Int,Bool}}(undef, 0)
     nc_template = mdbm.T01
@@ -188,7 +188,7 @@ function interpsubcubesolution!(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t
 
 end
 
-function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
 
 
     @inbounds for (face, fixdim) in zip(faces, fixed_dims)
@@ -201,11 +201,11 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, md
         T11pinv = MDBM.T11pinvmaker(Val(length(free_dims)))
 
         posinterp = zeros(MVector{N,FT})
-        grad = zeros(MMatrix{N,Nf + Nc,FT})
+        grad = zeros(MMatrix{N,Nfc,FT})
 
-        # As = MVector{Nf + Nc,FT}(undef)
-        # ns = MMatrix{length(free_dims),Nf + Nc,FT}(undef)
-        # fit_hyperplane!(FunTupleVector, Val(Nfree), Val(Nf), Val(Nc), T11pinv,
+        # As = MVector{Nfc,FT}(undef)
+        # ns = MMatrix{length(free_dims),Nfc,FT}(undef)
+        # fit_hyperplane!(FunTupleVector, Val(Nfree), Val(Nf),Val(Nc), T11pinv,
         # posinterp[free_dims],grad[free_dims,:],As,ns)
 
         p, g = fit_hyperplane(FunTupleVector, Val(Nfree), Val(Nf), Val(Nc), typeof(FunTupleVector[1][1][1]), T11pinv)
@@ -239,11 +239,11 @@ end
 function extract_paths_local(nc::NCube)
     extract_paths(nc.posinterp)
 end
-function extract_paths(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function extract_paths(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     [getinterpolatedsolution.(posloc, Ref(nc.corner), Ref(mdbm.axes)) for posloc in extract_paths_local(nc)]
 end
 
-function extract_paths(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function extract_paths(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     extract_paths.(mdbm.ncubes, Ref(mdbm))
 end
 
@@ -312,7 +312,7 @@ function issingchange(FunTupleVector::AbstractVector, Nf::Integer, Nc::Integer):
     ])#check for all condition
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{0}}, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function _interpolate!(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, ::Type{Val{0}}, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     # println("precompute the missing elemnts toghether!")
     funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
     if doThreadprecomp && typeof(mdbm.fc) <: MemF  #TODO: It is parallel, but Somehow it is slower!!
@@ -329,88 +329,91 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     return nothing
 end
 
-function fit_hyperplane_CHATGPT!(
-    FunTupleVector,
-    ::Val{Nfree}, ::Val{Nf}, ::Val{Nc}, T11pinv,
-    posinterp::AbstractVector{FT},
-    grad::AbstractMatrix{FT},
-) where {Nfree,Nf,Nc,FT}
 
-    # number of corners = 2^Nfree
-    #const 
-    C = 1 << Nfree
-
-    # reuse these stack‐allocated buffers:
-    vals = MVector{C,FT}(undef)                  # to hold corner‐values
-    A_sf = MMatrix{C,C,FT}(undef)              # temporary, if you need it
-    # but we’re going to go straight to a ns x (Nf+Nc) matrix:
-    ns_sf = MMatrix{Nfree,Nf + Nc,FT}(undef)     # gradients
-    As_sf = MVector{Nf + Nc,FT}(undef)             # intercepts
-
-    # 1) fill As_sf and ns_sf via static loops
-    # -----------------------------------------------------
-    # for each equation fᵢ or active constraint cⱼ,
-    # build the C-vector of values, multiply by T11pinv once,
-    # split off last entry into As_sf, the rest into ns_sf:
-    eq = 0
-    @inbounds for k in 1:Nf
-        @inbounds for x in 1:C
-            vals[x] = FunTupleVector[x][1][k]
-        end
-        let sol = T11pinv * vals  # this is all static
-            As_sf[k] = sol[C]
-            for d in 1:Nfree
-                ns_sf[d, k] = sol[d]
-            end
-        end
-        eq += 1
-    end
-
-    if Nc > 0
-        @inbounds for k in 1:Nc
-            # only if this constraint is “active” in this cube
-            if any(c -> !isless(zero(c[2][k]), c[2][k]), FunTupleVector)
-                @inbounds for x in 1:C
-                    vals[x] = FunTupleVector[x][2][k]
-                end
-                let sol = T11pinv * vals
-                    As_sf[Nf+eq] = sol[C]
-                    for d in 1:Nfree
-                        ns_sf[d, Nf+eq] = sol[d]
-                    end
-                end
-                eq += 1
-            end
-        end
-    end
-
-    # 2) solve the small normal‐equation system via a single static \
-    # -----------------------------------------------------
-    # a is Nfree×eq,  d is eq-vector:
-    a = @view ns_sf[:, 1:eq]
-    d = view(As_sf, 1:eq)
-
-    # use back-slash on a static array (gives you the least-squares solution)
-    # it will pick QR or Cholesky under the hood, with _no_ SVD allocation
-    try
-        p = a \ d   # MVector{Nfree,FT}
-    catch
-        # singular → push it out of the cube
-        fill!(posinterp, 1e3)
-        fill!(grad, NaN)
-        return
-    end
-
-    # 3) copy back into the user buffers and return
-    @inbounds for i in 1:Nfree
-        posinterp[i] = p[i]
-        for j in 1:eq
-            grad[i, j] = ns_sf[i, j]
-        end
-    end
-
-    return
-end
+# TODO: deprecated - use fit_hyperplane instead
+#
+# function fit_hyperplane_CHATGPT!(
+#     FunTupleVector,
+#     ::Val{Nfree}, ::Val{Nfc}, T11pinv,
+#     posinterp::AbstractVector{FT},
+#     grad::AbstractMatrix{FT},
+# ) where {Nfree,Nfc,FT}
+# 
+#     # number of corners = 2^Nfree
+#     #const 
+#     C = 1 << Nfree
+# 
+#     # reuse these stack‐allocated buffers:
+#     vals = MVector{C,FT}(undef)                  # to hold corner‐values
+#     A_sf = MMatrix{C,C,FT}(undef)              # temporary, if you need it
+#     # but we’re going to go straight to a ns x (Nf+Nc) matrix:
+#     ns_sf = MMatrix{Nfree,Nfc,FT}(undef)     # gradients
+#     As_sf = MVector{Nfc,FT}(undef)             # intercepts
+# 
+#     # 1) fill As_sf and ns_sf via static loops
+#     # -----------------------------------------------------
+#     # for each equation fᵢ or active constraint cⱼ,
+#     # build the C-vector of values, multiply by T11pinv once,
+#     # split off last entry into As_sf, the rest into ns_sf:
+#     eq = 0
+#     @inbounds for k in 1:Nf
+#         @inbounds for x in 1:C
+#             vals[x] = FunTupleVector[x][1][k]
+#         end
+#         let sol = T11pinv * vals  # this is all static
+#             As_sf[k] = sol[C]
+#             for d in 1:Nfree
+#                 ns_sf[d, k] = sol[d]
+#             end
+#         end
+#         eq += 1
+#     end
+# 
+#     if Nc > 0
+#         @inbounds for k in 1:Nc
+#             # only if this constraint is “active” in this cube
+#             if any(c -> !isless(zero(c[2][k]), c[2][k]), FunTupleVector)
+#                 @inbounds for x in 1:C
+#                     vals[x] = FunTupleVector[x][2][k]
+#                 end
+#                 let sol = T11pinv * vals
+#                     As_sf[Nf+eq] = sol[C]
+#                     for d in 1:Nfree
+#                         ns_sf[d, Nf+eq] = sol[d]
+#                     end
+#                 end
+#                 eq += 1
+#             end
+#         end
+#     end
+# 
+#     # 2) solve the small normal‐equation system via a single static \
+#     # -----------------------------------------------------
+#     # a is Nfree×eq,  d is eq-vector:
+#     a = @view ns_sf[:, 1:eq]
+#     d = view(As_sf, 1:eq)
+# 
+#     # use back-slash on a static array (gives you the least-squares solution)
+#     # it will pick QR or Cholesky under the hood, with _no_ SVD allocation
+#     try
+#         p = a \ d   # MVector{Nfree,FT}
+#     catch
+#         # singular → push it out of the cube
+#         fill!(posinterp, 1e3)
+#         fill!(grad, NaN)
+#         return
+#     end
+# 
+#     # 3) copy back into the user buffers and return
+#     @inbounds for i in 1:Nfree
+#         posinterp[i] = p[i]
+#         for j in 1:eq
+#             grad[i, j] = ns_sf[i, j]
+#         end
+#     end
+# 
+#     return
+# end
 
 
 function fit_hyperplane!(FunTupleVector, ::Val{N}, ::Val{Nf}, ::Val{Nc}, T11pinv,
@@ -421,8 +424,8 @@ function fit_hyperplane!(FunTupleVector, ::Val{N}, ::Val{Nf}, ::Val{Nc}, T11pinv
 
 
     #TODO: store them somewhere - to reduce memory allcoations
-    #As = MVector{Nf + Nc,FT}(undef)
-    #ns = MMatrix{N,Nf + Nc,FT}(undef)
+    #As = MVector{Nfc,FT}(undef)
+    #ns = MMatrix{N,Nf+Nc,FT}(undef)
     @inbounds if Nc == 0 || all(
         any((c) -> !isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
         for fi in 1:length(FunTupleVector[1][2])
@@ -483,7 +486,7 @@ function fit_hyperplane(FunTupleVector, ::Val{N}, ::Val{Nf}, ::Val{Nc}, FT, T11p
     grad = zeros(MMatrix{N,Nf + Nc,FT})
 
     #TODO: store them somewhere - to reduce memory allcoations
-    As = MVector{Nf + Nc,FT}(undef)
+    As = MVector{Nf+Nc,FT}(undef)
     ns = MMatrix{N,Nf + Nc,FT}(undef)
     @inbounds if Nc == 0 || all(
         any((c) -> !isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
@@ -537,7 +540,7 @@ function fit_hyperplane(FunTupleVector, ::Val{N}, ::Val{Nf}, ::Val{Nc}, FT, T11p
     return posinterp, grad
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function _interpolate!(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     # println("precompute the missing elemnts toghether!")
     funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(ncubes, mdbm.T01)))
     if doThreadprecomp && typeof(mdbm.fc) <: MemF #Memoization is used #TODO: It is parallel, but Somehow it is slower!!
@@ -547,17 +550,17 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
         mdbm.fc.(unique!(funargs))#prcomputed if it was not done before -> necessary for the later threaded for loop
     end
 
-    #As = MVector{Nf + Nc,FT}(undef)
-    #ns = MMatrix{N,Nf + Nc,FT}(undef)
+    #As = MVector{Nfc,FT}(undef)
+    #ns = MMatrix{N,Nfc,FT}(undef)
     #for nc in ncubes
     Threads.@threads for i_nc in 1:length(ncubes)
         nc = ncubes[i_nc]
-        As = MVector{Nf + Nc,FT}(undef)
+        As = MVector{Nfc,FT}(undef)
         ns = MMatrix{N,Nf + Nc,FT}(undef)
         FunTupleVector = getcornerval(nc, mdbm)
         fit_hyperplane!(FunTupleVector, Val(N), Val(Nf), Val(Nc), mdbm.T11pinv,
             nc.posinterp.p, nc.gradient, As, ns)
-        # nc.posinterp.p[:], nc.gradient[:] = fit_hyperplane(FunTupleVector, Val(N), Val(Nf), Val(Nc), FT, mdbm.T11pinv)
+        # nc.posinterp.p[:], nc.gradient[:] = fit_hyperplane(FunTupleVector, Val(N), Val(Nf),Val(Nc), FT, mdbm.T11pinv)
 
     end
 
@@ -572,25 +575,25 @@ function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t
     return nothing
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{Ninterp}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,IT,FT,N,Ninterp,Nf,Nc,t01T,t11T,aT}
+function _interpolate!(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, ::Type{Val{Ninterp}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,IT,FT,N,Ninterp,Nf,Nc,Nfc,t01T,t11T,aT}
     error("order $(Ninterp) interpolation is not supperted (yet)")
 end
 
 """
-    interpolate!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1)
+    interpolate!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1)
 
 Interpolate the solution within the n-cube with order `interpolationorder`.
  - `interpolationorder=0` provide the midpoint of the n-cube
  - `interpolationorder=1` preform a linear fit and provide closest solution point to the mindpoint of the n-cube
 """
-function interpolate!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function interpolate!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     _interpolate!(mdbm.ncubes, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
 end
 
 
 
 """
-    refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; directions::Vector{T}=collect(Int64,1:N)) where N where Nf where Nc where T<:Integer
+    refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; directions::Vector{T}=collect(Int64,1:N)) where N where Nf where Nc where T<:Integer
 
 Double the resolution of the axes along the provided `directions` then halving the `ncubes` accordingly.
 
@@ -600,14 +603,14 @@ julia> refine!(mymdbm)
 julia> refine!(mymdbm,[1,1,2])
 ```
 """
-function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; directions::Vector{T}=collect(Int64, 1:N)) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,t01T,t11T,aT}
+function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; directions::Vector{T}=collect(Int64, 1:N)) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,Nfc,t01T,t11T,aT}
     doubling!(mdbm, directions)
-    refinencubes!(mdbm.ncubes, directions)
+    refinencubes!(mdbm, directions)
     return nothing
 end
 
 """
-    doubling!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, directions::Vector{T}) where T<:Integer  where N where Nf where Nc
+    doubling!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, directions::Vector{T}) where T<:Integer  where N where Nf where Nc
 
 Double the resolution of the axes along the provided `directions`, then set the new size of the n-cubes.
 
@@ -617,7 +620,7 @@ julia> doubling!(mymdbm)
 julia> doubling!(mymdbm,[1,2])
 ```
 """
-function doubling!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, directions::Vector{T}) where {T<:Integer} where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function doubling!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, directions::Vector{T}) where {T<:Integer} where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     axdoubling!.(mdbm.axes[directions])
     @inbounds for nc in mdbm.ncubes
         for dir in directions
@@ -638,9 +641,9 @@ julia> refinencubes!(mymdbm.ncubes)
 julia> refinencubes!(mymdbm.ncubes,mymdbm,[1,2])
 ```
 """
-# {IT,FT,N,Nfc} where {IT,FT,N,Nfc} 
-function refinencubes!(ncubes::Vector{<:NCube{IT,FT,N,Nfc}}, directions::Vector{T}) where {T<:Integer,IT,FT,N,Nfc} #where t01T # where IT where FT where N
-    sizehint!(ncubes, (length(ncubes) * 2^length(directions)) * 1.2) # preallocate memory for the new ncubes, and some overhead, to have extra space fo neighbour chacking
+function refinencubes!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, directions::Vector{T}) where {T<:Integer,fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT} #where t01T # where IT where FT where N
+    ncubes = mdbm.ncubes
+    sizehint!(ncubes, (length(ncubes) * 2^length(directions)) * 1.2) # preallocate memory for the new ncubes, and some overhead, to have extra space for neighbour chacking
     @inbounds for dir in directions
         for nc in ncubes
             nc.size[dir] /= 2
@@ -688,20 +691,20 @@ end
 
 
 """
-    getinterpolatedsolution(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
+    getinterpolatedsolution(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT})
 
 Provide the interpolated coordinates of the all the detected solution (approximately where foo(x,y) == 0 and c(x,y)>0).
 """
-function getinterpolatedsolution(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function getinterpolatedsolution(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     getinterpolatedsolution(mdbm.ncubes, mdbm)
 end
 
 """
-    getinterpolatedsolution(ncubes::Vector{<:NCube},mdbm::MDBM_Problem{N,Nf,Nc})
+    getinterpolatedsolution(ncubes::Vector{<:NCube},mdbm::MDBM_Problem{N,Nf,Nc,Nfc})
 
 Provide the interpolated coordinates of the detected solution for the selected n-cubes (approximately where foo(x,y) == 0 and c(x,y)>0).
 """
-function getinterpolatedsolution(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function getinterpolatedsolution(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     @inbounds [
         [
             (typeof(mdbm.axes[i].ticks).parameters[1])(
@@ -713,11 +716,11 @@ function getinterpolatedsolution(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT
 end
 
 """
-    getinterpolatedsolution(nc::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
+    getinterpolatedsolution(nc::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT})
 
 Provide the interpolated coordinates of the solution inside the provided n-cube `nc` (approximately where foo(x,y) == 0 and c(x,y)>0).
 """
-function getinterpolatedsolution(nc::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT,Nfc}
+function getinterpolatedsolution(nc::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     @inbounds [
         (typeof(mdbm.axes[i].ticks).parameters[1])(
             (mdbm.axes[i].ticks[nc.corner[i]] * (1.0 - (nc.posinterp.p[i] + 1.0) / 2.0) +
@@ -733,7 +736,7 @@ function getinterpolatedsolution(posinterp, corner, axes::Axes{N,aT}) where {N,a
 end
 
 
-function getinterpolatedgradient(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function getinterpolatedgradient(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #println("getinterpolatedgradient")
     @inbounds [[
         [
@@ -744,7 +747,7 @@ function getinterpolatedgradient(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT
 end
 
 
-function getinterpolatedgradient(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function getinterpolatedgradient(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     @inbounds [[
         (mdbm.axes[i].ticks[nc.corner[i]] * (1.0 .- (nc.gradient[i, fi] .+ 1.0) ./ 2.0) +
          mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] * ((nc.gradient[i, fi] .+ 1.0) ./ 2.0))
@@ -752,39 +755,38 @@ function getinterpolatedgradient(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,
 end
 
 """
-    getevaluatedpoints(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
+    getevaluatedpoints(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT})
 
 Provide all the coordinates where the function is evaluated.
 """
-function getevaluatedpoints(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function getevaluatedpoints(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #    [[x.callargs[i] for x in mdbm.fc.fvalarg] for i in 1:N]
     [getindex.(mdbm.fc.fvalarg.keys, i) for i in 1:N]
 end
 
 """
-    getevaluatedfunctionvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
+    getevaluatedfunctionvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT})
 
 Provide the functionvalues for all the coordinates where the function is evaluated.
 (see: `getevaluatedfunctionvalues`)
 """
-function getevaluatedfunctionvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function getevaluatedfunctionvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #[x.funval for x in mdbm.fc.fvalarg]
     getindex.(getindex.(Ref(mdbm.fc.fvalarg), mdbm.fc.fvalarg.keys), 1)
 end
 
 """
-    getevaluatedconstraintvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
+    getevaluatedconstraintvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT})
 
 Provide the constraints values for all the coordinates where the function is evaluated.
 (see: `getevaluatedconstraintvalues`)
 """
-function getevaluatedconstraintvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function getevaluatedconstraintvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #[x.cval for x in mdbm.fc.fvalarg]
     getindex.(getindex.(Ref(mdbm.fc.fvalarg), mdbm.fc.fvalarg.keys), 2)
 end
 
-# function generateneighbours(ncubes::Vector{<:NCube},mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where N  where Nf where Nc
-function generateneighbours(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function generateneighbours(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #  #TODO: Let the user select the method
     # #-------all faceing/cornering neightbours----------------
     #  #neighbourind=1:2^length(mdbm.axes) #cornering neightbours also - unnecessary
@@ -823,15 +825,21 @@ function generateneighbours(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf
         end
     end
     #-------direcational neightbours----------------
-
+    #  println("Generated $(length(nc_neighbour)) raw.")
     wrap_ncube_periodic!.(nc_neighbour, Ref(mdbm.axes))
-
-    #filter!(nc -> !(any(nc.corner .< 1) || any((nc.corner + nc.size) .> [length.(mdbm.axes)...])), nc_neighbour)#remove the overhanging ncubes
+    #  #filter!(nc -> !(any(nc.corner .< 1) || any((nc.corner + nc.size) .> [length.(mdbm.axes)...])), nc_neighbour)#remove the overhanging ncubes
     filter!(nc -> in_range(nc, mdbm.axes), nc_neighbour)
-    deleteat!(nc_neighbour, is_sorted_in_sorted(nc_neighbour, ncubes))# delete the ones, whihe were in the list onriginally
-    #sort!(nc_neighbour; alg=QuickSort)# it is slower the the default method
+
+
     sort!(nc_neighbour)
     unique!(nc_neighbour)
+
+    # filter!(x -> !(x in mdbm.ncubes), nc_neighbour)
+    #deleteat!(nc_neighbour, is_sorted_in_sorted(nc_neighbour, ncubes))# delete the ones, whihe were in the list onriginally
+
+    ##  deleteat!(nc_neighbour, is_sorted_in_sorted(nc_neighbour, ncubes))# delete the ones, whihe were in the list onriginally
+    #sort!(nc_neighbour; alg=QuickSort)# it is slower the the default method
+
     return nc_neighbour
 end
 """
@@ -879,7 +887,7 @@ function wrap_ncube_periodic!(nc::NCube{IT,FT,N,Nfc}, axes::Axes{N,AT}) where {I
 end
 
 """
-    checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0)
+    checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0)
 
 Check the face-neighbouring n-cubes to discover the lost (missing) part of the solutions.
 
@@ -892,32 +900,40 @@ It works only if the dimension of the solution object is larger the zero (the ma
     - `interpolationorder::Int=0`: interpolation order method of the neighbours checked
     - `maxiteration::Int=0~: the max number of steps in the 'continuation-like' exploring. If zero, then infinity steps are allowed
 """
-function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}#only for unite size cubes
+function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=0, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}#only for unite size cubes
     if isempty(mdbm.ncubes)
         println("There is no bracketing n-cubes to check!")
     else
-        ncubes2check = mdbm.ncubes
+        ncubes2check = deepcopy(mdbm.ncubes)
+        ncubes2checked = deepcopy(mdbm.ncubes)
         numberofiteration = 0
         while !isempty(ncubes2check) && (maxiteration == 0 ? true : numberofiteration < maxiteration)
 
             numberofiteration += 1
             ncubes2check = generateneighbours(ncubes2check, mdbm)
-            deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, mdbm.ncubes))#delete the ones which is already presented
-            #@time fast_diff_sorted!(ncubes2check, mdbm.ncubes)#delete the ones which is already presented
+            #  deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, mdbm.ncubes))#delete the ones which is already presented
+            filter!(x -> !(x in ncubes2checked), ncubes2check)
+            #deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, ncubes2checked))# delete the ones, whihe were in the list onriginally
+            append!(ncubes2checked, deepcopy(ncubes2check))
+            # unique!(ncubes2checked) # It should not happen!!!
             _interpolate!(ncubes2check, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp) #remove the non-bracketing, only proper new bracketing cubes remained
             Base.append!(mdbm.ncubes, deepcopy(ncubes2check))
-            sort!(mdbm.ncubes; alg=QuickSort)
+
+            # unique!(mdbm.ncubes) # It should not happen!!!
+            # sort!(mdbm.ncubes; alg=QuickSort)# it is enough to sort it at the end
         end
+        sort!(mdbm.ncubes; alg=QuickSort)# it is enough to sort it at the end
+
     end
 end
 
 
 """
-    connect(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
+    connect(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT})
 
 Provide the edge connection (as a list of point-paris) of the solution point-cloud based on the face-neighbouring n-cubes.
 """
-function connect(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function connect(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #---------- line connection (no corener neighbour is needed) --------------
     DT1 = Array{Tuple{Int64,Int64}}(undef, 0)
     for inc in 1:length(mdbm.ncubes)
@@ -970,7 +986,7 @@ function triangulation(DT1::Array{Tuple{Int64,Int64}})::Array{Tuple{Int64,Int64,
 end
 
 """
-    solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1)
+    solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1)
 
 Refine the `MDBM_Problem` `iteration` times, then perform a neighbour check.
 `interpolationorder` defines the interpolation method within the n-cubes.
@@ -980,7 +996,7 @@ Refine the `MDBM_Problem` `iteration` times, then perform a neighbour check.
 julia> solve!(mymdbm,4)
 ```
 """
-function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, verbosity=1, doThreadprecomp=true, checkneighbourNum=1) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, verbosity=1, doThreadprecomp=true, checkneighbourNum=1) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #checkneighbourNum = 0 : no neighbour check at all
     #checkneighbourNum = 1 : check neighbour only once at the end
     #checkneighbourNum > 1 : check neighbour at every iteration
