@@ -1,10 +1,9 @@
 name = "MDBM"
 uuid = "dd61e66b-39ce-57b0-8813-509f78be4b4d"
 authors = ["Daniel Bachrathy"]
-version = "0.2.1"
+version = "0.2.0"
 
 [deps]
-GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 

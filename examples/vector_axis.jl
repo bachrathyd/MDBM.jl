@@ -11,7 +11,7 @@ using LinearAlgebra
 # the function which defines the region on the plane of the triangle
 fig = figure(1);clf()
 Circ_mdbm=MDBM_Problem((x,y,r)->x*x+y*y-r*r,[-2.0:2.0,-2.0:2.0,0.75:0.2:1.25])
-solve!(Circ_mdbm,3);
+solve!(Circ_mdbm,3, doThreadprecomp=false, verbosity=0);
 x_sol,y_sol=getinterpolatedsolution(Circ_mdbm)
 scatter(x_sol,y_sol,s=2);
 
