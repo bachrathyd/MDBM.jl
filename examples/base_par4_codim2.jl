@@ -15,7 +15,7 @@ function c(x, y, z,r)
 end
 
 mymdbm = MDBM_Problem(foo_par4_codim2, [-3.0:2.0:3.0, -3.0:2.0:3.0, -3.0:2.0:3.0, 1.0:2.0], constraint=c)
-@time solve!(mymdbm, 4, interpolationorder=1)
+solve!(mymdbm, 4, interpolationorder=1)
 
 
 f = Figure()

@@ -265,19 +265,21 @@ struct NCube{IT,FT,N,Nfc}
 end
 
 
-# Base.isless(a::NCube{IT,FT,N,Nf,Nc}, b::NCube{IT,FT,N,Nf,Nc}) where {IT,FT,N,Nf,Nc} = Base.isless([a.corner, a.size], [b.corner, b.size])
-# Base.isequal(a::NCube{IT,FT,N,Nf,Nc}, b::NCube{IT,FT,N,Nf,Nc}) where {IT,FT,N,Nf,Nc} = all([a.corner == b.corner, a.size == b.size])
+# Base.isless(a::NCube{IT,FT,N,Nfc}, b::NCube{IT,FT,N,Nfc}) where {IT,FT,N,Nfc} = Base.isless([a.corner, a.size], [b.corner, b.size])
+# Base.isequal(a::NCube{IT,FT,N,Nfc}, b::NCube{IT,FT,N,Nfc}) where {IT,FT,N,Nfc} = all([a.corner == b.corner, a.size == b.size])
 # import Base.==
-# ==(a::NCube{IT,FT,N,Nf,Nc}, b::NCube{IT,FT,N,Nf,Nc}) where {IT,FT,N,Nf,Nc} = all([a.corner == b.corner, a.size == b.size])
+# ==(a::NCube{IT,FT,N,Nfc}, b::NCube{IT,FT,N,Nfc}) where {IT,FT,N,Nfc} = all([a.corner == b.corner, a.size == b.size])
 
 Base.isless(a::NCube, b::NCube) = Base.isless([a.corner, a.size], [b.corner, b.size])
 Base.isequal(a::NCube, b::NCube) = all([a.corner == b.corner, a.size == b.size])
 import Base.==
 ==(a::NCube, b::NCube) = all([a.corner == b.corner, a.size == b.size])
 
+Base.hash(x::NCube, h::UInt) =
+    hash((x.corner, x.size), h)
 
 """
-    struct MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT}
+    struct MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT}
 
 Store the main data for the Multi-Dimensional Bisection Method.
 
@@ -300,24 +302,24 @@ ax2=Axis(-5:2:5.0,"y") # initial grid in y direction
 mymdbm=MDBM_Problem(foo,[ax1,ax2],constraint=c)
 ```
 """
-struct MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+struct MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     "(memoized) function and constraint in a Tuple"
     fc::fcT
     "The vector of discretized parameters space"
     axes::Axes{N,aT}
     "the bracketing n-cubes (which contains a solution)"
-    ncubes::Vector{<:NCube}#{IT,FT,N,Nfc}
+    ncubes::Vector{NCube{IT,FT,N,Nfc}}
     T01::t01T#
     T11pinv::t11T
 end
 
 #{IT,FT,N,Nfc}
-function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc, IT=Int, FT=Float64) where {fcT<:Function}# where {IT<:Integer} where {FT<:AbstractFloat}
+
+function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf,Nc,Nfc, IT=Int, FT=Float64) where {fcT<:Function}# where {IT<:Integer} where {FT<:AbstractFloat}
     N = length(axes)
     T01 = T01maker(Val(N))
     T11pinv = T11pinvmaker(Val(N))
-    Nfc = Nf + Nc
-    MDBM_Problem{fcT,N,Nf,Nc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
+    MDBM_Problem{fcT,N,Nf,Nc,Nfc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
         sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
             PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:])
             , T01, T11pinv)
@@ -351,7 +353,7 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
         fun = (x) -> (f(x...), constraint(x...))
     end
     Ndim = length(axes)
-    MDBM_Problem(fun, axes, Vector{NCube{Int64,Float64,Ndim,Nfc}}(undef, 0), Nf, Nc)
+    MDBM_Problem(fun, axes, Vector{NCube{Int64,Float64,Ndim,Nfc}}(undef, 0), Nf,Nc,Nfc)
 end
 
 function MDBM_Problem(f::Function, a::AbstractVector{<:AbstractVector}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
@@ -362,11 +364,12 @@ function MDBM_Problem(f::Function, a::AbstractVector{<:AbstractVector}; constrai
 end
 
 
-function Base.show(io::IO, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function Base.show(io::IO, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     println(io, "Multi-Dimensional Bisection Method Problem")
     println(io, "  parameter dimension:   ", N)#typeof(mdbm).parameters[2])#N
-    println(io, "  co-dimension:          ", Nf)#typeof(mdbm).parameters[3])#Nf
-    println(io, "  number of constraints: ", Nc)#typeof(mdbm).parameters[4])#Nc
+    #println(io, "  co-dimension:          ", Nf)#typeof(mdbm).parameters[3])#Nf
+    #println(io, "  number of constraints: ", Nc)#typeof(mdbm).parameters[4])#Nc
+    println(io, "  number of co-dimension + constraints:          ", Nfc)#typeof(mdbm).parameters[3])#Nfc
     println(io, "Axes:")
     for k in 1:length(mdbm.axes)
         println(io, "  axis #", k, ": elements: ", length(mdbm.axes[k]), "; elementtype: ", typeof(mdbm.axes[k][1]), "; first: ", mdbm.axes[k][1], "; last: ", mdbm.axes[k][end])
