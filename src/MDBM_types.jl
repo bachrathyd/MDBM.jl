@@ -116,18 +116,20 @@ Base.isless(a::MDBMcontainer{RTf,RTc,AT}, b::MDBMcontainer{RTf,RTc,AT}) where {R
 
 #TODO: Shifting leads to memory movements! Fix: switch to an OrderedDict{AT,Tuple{RTf,RTc}} (or even a plain Dict plus a separate sorted key‐list only when you need ordering). Lookups/inserts become amortized O(1), no shifting. 
 #TODO memoization for multiple functions Vector{Function}
-struct MemF{fT,cT,RTf,RTc,AT} <: Function
-    f::fT
-    c::cT
+using FunctionWrappers: FunctionWrapper
+
+struct MemF{RTf,RTc,AT} <: Function
+    f::FunctionWrapper{RTf, AT}
+    c::FunctionWrapper{RTc, AT}
     fvalarg::SortedCache{AT,Tuple{RTf,RTc}}#Vector{MDBMcontainer{RTf,RTc,AT}}#funval,callargs
     memoryacc::Ref{Int64}#MVector{1,Int64} #number of function value call for already evaluated parameters
-    MemF(f::fT, c::cT, cont::SortedCache{AT,Tuple{RTf,RTc}}) where {fT,cT,RTf,RTc,AT} = new{fT,cT,RTf,RTc,AT}(f, c, cont, Ref(Int64(0)))
-    #MemF(f::fT, c::cT) where {fT,cT,RTf,RTc,AT} = new{fT,cT,RTf,RTc,AT}(f, c, SortedCache{AT,Tuple{RTf,RTc}}(), Ref(Int64(0)))
+    MemF(f, c, cont::SortedCache{AT,Tuple{RTf,RTc}}, ::Type{RTf}, ::Type{RTc}, ::Type{AT}) where {RTf,RTc,AT} = 
+        new{RTf,RTc,AT}(FunctionWrapper{RTf,AT}(f), FunctionWrapper{RTc,AT}(c), cont, Ref(Int64(0)))
 end
 
-(memfun::MemF{fT,cT,RTf,RTc,AT})(::Type{RTf}, ::Type{RTc}, args::AT) where {fT,cT,RTf,RTc,AT} = (memfun.f(args...,)::RTf, memfun.c(args...,)::RTc)::Tuple{RTf,RTc}
+(memfun::MemF{RTf,RTc,AT})(::Type{RTf}, ::Type{RTc}, args::AT) where {RTf,RTc,AT} = (memfun.f(args...,)::RTf, memfun.c(args...,)::RTc)::Tuple{RTf,RTc}
 
-function (memfun::MemF{fT,cT,RTf,RTc,AT})(args::AT) where {fT,cT,RTf,RTc,AT}
+function (memfun::MemF{RTf,RTc,AT})(args::AT) where {RTf,RTc,AT}
     if haskey(memfun.fvalarg.data, args)
         memfun.memoryacc[] += 1
         return memfun.fvalarg[args]
@@ -161,7 +163,7 @@ function (memfun::MemF{fT,cT,RTf,RTc,AT})(args::AT) where {fT,cT,RTf,RTc,AT}
 end
 
 #TODO Inconsistent return in the “batch” call - it should return a vector of the results of the function should be renamed e.g.: prefill!
-function (memfun::MemF{fT,cT,RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {fT,cT,RTf,RTc,AT}
+function (memfun::MemF{RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {RTf,RTc,AT}
     #println("Threaded")
     Vargs = unique(sort(Vargs))
     VargsIndex2compute = .!is_sorted_in_sorted(Vargs, memfun.fvalarg)
@@ -336,7 +338,7 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
     if length(type_f) == 0
         error("input of the function is not compatible with the provided axes")
     else
-        RTf = type_f[1]#Return Type of f
+       RTf = type_f[1]#Return Type of f
     end
 
     type_con = Base.return_types(constraint, AT)
@@ -347,7 +349,7 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
     end
 
     if memoization
-        fun = MemF(f, constraint, SortedCache{AT,Tuple{RTf,RTc}}())#Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
+        fun = MemF(f, constraint, SortedCache{AT,Tuple{RTf,RTc}}(), RTf, RTc, AT)#Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
     else
         #   fun = (x::AT) -> (f(x...)::RTf, constraint(x...)::RTc)::Tuple{RTf,RTc}
         fun = (x) -> (f(x...), constraint(x...))
