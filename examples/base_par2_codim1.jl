@@ -10,8 +10,10 @@ function foo_par2_codim1(x, y)
     #((x^2.0 + y) - 1.0^2.0)*x #TODO: test with this function, too
 end
 mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
-@time solve!(mymdbm, 5)#number of refinements - increase it slightly to see smoother results 
+@time solve!(mymdbm, 3)#number of refinements - increase it slightly to see smoother results 
+    
 
+# Plotting the results
 f = Figure()
 #show the final resolution of the grid based on the minorticks
 kwargs = (; xminorticksvisible = true, xminorgridvisible = true, yminorticksvisible = true, yminorgridvisible = true)
@@ -20,6 +22,17 @@ ax1=GLMakie.Axis(f[1, 1]; xminorticks = mymdbm.axes[1].ticks, yminorticks  = mym
 # n-cube interpolation
 xy_sol = getinterpolatedsolution(mymdbm)
 scatter!(xy_sol..., markersize = 15, color = :red,marker ='x',strokewidth=3,label = "solution")
+
+# Axes extend end recalculate
+# axesextend!(mymdbm,1, prepend=-10:0.1:-3.2, append=3.0:0.1:5)
+# axesextend!(mymdbm,2, prepend=-10:0.1:0, append=mymdbm.axes[2][end]:0.1:5)#%overlapping valuse are eliminated automatically
+
+axesextend!(mymdbm,1, -10:0.1:10)#both prepend and append automatically (overlapping values are eliminated)
+axesextend!(mymdbm,2, -10:0.1:10)#both prepend and append automatically (overlapping values are eliminated)
+solve!(mymdbm, 2) #no new refinements, it basically just check the neightbours and estend the exsisting solution similarly to continuation
+xy_sol = getinterpolatedsolution(mymdbm)
+scatter!(xy_sol..., markersize = 15, color = :red,marker ='x',strokewidth=3,label = "solution")
+
 
 # show the points where the function is evaluated
 xy_val = getevaluatedpoints(mymdbm)
@@ -35,6 +48,16 @@ lines!(edge2plot_xyz..., linewidth=5,label = "midpoints solution connected")
 #plotting the gradintes
 gxyz=getinterpolatedgradient(mymdbm.ncubes,mymdbm)
 arrows!(xy_sol..., gxyz[1]..., arrowsize = 0.01, lengthscale = 0.1,label = "gradient")#    arrowcolor = strength, linecolor = strength)
+
+# Recreate with shifted contour level and axes
+
+mymdbm_shifted = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0], contour_level_fc=[5.5,nothing])#the function values are reevaluated
+mymdbm_shifted=recreate(mymdbm, contour_level_fc=[5.5,nothing],axes_new=[-3.1:3.0, -3.1:3.0])#share the same memoized function with the previouse one
+@time solve!(mymdbm_shifted, 3)#number of refinements - increase it slightly to see smoother results 
+
+xy_sol = getinterpolatedsolution(mymdbm_shifted)
+scatter!(xy_sol..., markersize = 15, color = :blue,marker ='x',strokewidth=3,label = "solution")
+
 
 
 

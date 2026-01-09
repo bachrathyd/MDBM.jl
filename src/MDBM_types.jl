@@ -119,11 +119,11 @@ Base.isless(a::MDBMcontainer{RTf,RTc,AT}, b::MDBMcontainer{RTf,RTc,AT}) where {R
 using FunctionWrappers: FunctionWrapper
 
 struct MemF{RTf,RTc,AT} <: Function
-    f::FunctionWrapper{RTf, AT}
-    c::FunctionWrapper{RTc, AT}
+    f::FunctionWrapper{RTf,AT}
+    c::FunctionWrapper{RTc,AT}
     fvalarg::SortedCache{AT,Tuple{RTf,RTc}}#Vector{MDBMcontainer{RTf,RTc,AT}}#funval,callargs
     memoryacc::Ref{Int64}#MVector{1,Int64} #number of function value call for already evaluated parameters
-    MemF(f, c, cont::SortedCache{AT,Tuple{RTf,RTc}}, ::Type{RTf}, ::Type{RTc}, ::Type{AT}) where {RTf,RTc,AT} = 
+    MemF(f, c, cont::SortedCache{AT,Tuple{RTf,RTc}}, ::Type{RTf}, ::Type{RTc}, ::Type{AT}) where {RTf,RTc,AT} =
         new{RTf,RTc,AT}(FunctionWrapper{RTf,AT}(f), FunctionWrapper{RTc,AT}(c), cont, Ref(Int64(0)))
 end
 
@@ -160,6 +160,10 @@ function (memfun::MemF{RTf,RTc,AT})(args::AT) where {RTf,RTc,AT}
     #  # deprecated #  #      memfun.memoryacc[] += 1
     #  # deprecated #  #      return (memfun.fvalarg[location].funval, memfun.fvalarg[location].cval)
     #  # deprecated #  #  end
+end
+
+function (memfun::MemF{RTf,RTc,AT})(args...) where {RTf,RTc,AT}
+    memfun(AT(args))
 end
 
 #TODO Inconsistent return in the “batch” call - it should return a vector of the results of the function should be renamed e.g.: prefill!
@@ -205,7 +209,7 @@ struct Axis{T} <: AbstractVector{T}
     name
     periodic::Bool
     function Axis(T::Type, a::AbstractVector, name=:unknown, periodic=false)
-        new{T}(T.(a), name,periodic)
+        new{T}(T.(a), name, periodic)
     end
 end
 Base.getindex(ax::Axis{T}, ind) where {T} = ax.ticks[ind]::T
@@ -213,7 +217,7 @@ Base.setindex!(ax::Axis, X, inds...) = setindex!(ax.ticks, X, inds...)
 Base.size(ax::Axis) = size(ax.ticks)
 
 function Axis(a::AbstractVector{T}, name=:unknown, periodic=false) where {T<:Real}
-    Axis(T, a, name,periodic)
+    Axis(T, a, name, periodic)
 end
 function Axis(a::AbstractVector{T}, name=:unknown, periodic=false) where {T}
     Axis(T, a, name)
@@ -304,6 +308,7 @@ ax2=Axis(-5:2:5.0,"y") # initial grid in y direction
 mymdbm=MDBM_Problem(foo,[ax1,ax2],constraint=c)
 ```
 """
+#mutable
 struct MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     "(memoized) function and constraint in a Tuple"
     fc::fcT
@@ -311,25 +316,25 @@ struct MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     axes::Axes{N,aT}
     "the bracketing n-cubes (which contains a solution)"
     ncubes::Vector{NCube{IT,FT,N,Nfc}}
+    contour_level_fc::Vector #contour levels
     T01::t01T#
     T11pinv::t11T
 end
 
-#{IT,FT,N,Nfc}
-
-function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf,Nc,Nfc, IT=Int, FT=Float64) where {fcT<:Function}# where {IT<:Integer} where {FT<:AbstractFloat}
+function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc, Nfc, IT=Int, FT=Float64; contour_level_fc=[nothing, nothing]) where {fcT<:Function}# where {IT<:Integer} where {FT<:AbstractFloat}
     N = length(axes)
     T01 = T01maker(Val(N))
     T11pinv = T11pinvmaker(Val(N))
+
+    println("3 contour_level_fc ", contour_level_fc)
     MDBM_Problem{fcT,N,Nf,Nc,Nfc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
         sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
-            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:])
-            , T01, T11pinv)
+            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, T01, T11pinv)
 end
 
 function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
     Nf=f(getindex.(axes0, 1)...) === nothing ? 0 : length(f(getindex.(axes0, 1)...)),
-    Nc=constraint(getindex.(axes0, 1)...) === nothing ? 0 : length(constraint(getindex.(axes0, 1)...)))#Float16(1.), nothing
+    Nc=constraint(getindex.(axes0, 1)...) === nothing ? 0 : length(constraint(getindex.(axes0, 1)...)), contour_level_fc=nothing)#Float16(1.), nothing
     Nfc = Nf + Nc
     axes = deepcopy.(axes0)
     argtypesofmyfunc = map(x -> typeof(x).parameters[1], axes)#Argument Type
@@ -338,7 +343,7 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
     if length(type_f) == 0
         error("input of the function is not compatible with the provided axes")
     else
-       RTf = type_f[1]#Return Type of f
+        RTf = type_f[1]#Return Type of f
     end
 
     type_con = Base.return_types(constraint, AT)
@@ -347,24 +352,57 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
     else
         RTc = type_con[1]#Return Type of the constraint function
     end
-
-    if memoization
-        fun = MemF(f, constraint, SortedCache{AT,Tuple{RTf,RTc}}(), RTf, RTc, AT)#Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
+    println("Checking memoization ...")
+    
+    if typeof(f) <: MemF
+        println("The function is already memoized: direct useage")
+        fun = f
+        memoization=true
     else
-        #   fun = (x::AT) -> (f(x...)::RTf, constraint(x...)::RTc)::Tuple{RTf,RTc}
-        fun = (x) -> (f(x...), constraint(x...))
+        println("Creating function with memoization = ", memoization)
+        if memoization
+            fun = MemF(f, constraint, SortedCache{AT,Tuple{RTf,RTc}}(), RTf, RTc, AT)#Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
+        else
+            #   fun = (x::AT) -> (f(x...)::RTf, constraint(x...)::RTc)::Tuple{RTf,RTc}
+            fun = (x) -> (f(x...), constraint(x...))
+        end
     end
     Ndim = length(axes)
-    MDBM_Problem(fun, axes, Vector{NCube{Int64,Float64,Ndim,Nfc}}(undef, 0), Nf,Nc,Nfc)
+    if contour_level_fc == nothing
+        contour_level_fc = [makezero(RTf), makezero(RTc)]
+    end
+    MDBM_Problem(fun, axes, Vector{NCube{Int64,Float64,Ndim,Nfc}}(undef, 0), Nf, Nc, Nfc, contour_level_fc=contour_level_fc)
 end
 
 function MDBM_Problem(f::Function, a::AbstractVector{<:AbstractVector}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
     Nf=f(getindex.(a, 1)...) === nothing ? 0 : length(f(getindex.(a, 1)...)),
-    Nc=constraint(getindex.(a, 1)...) === nothing ? 0 : length(constraint(getindex.(a, 1)...)))
+    Nc=constraint(getindex.(a, 1)...) === nothing ? 0 : length(constraint(getindex.(a, 1)...)), contour_level_fc=nothing)
     axes = [Axis(ax) for ax in a]
-    MDBM_Problem(f, axes, constraint=constraint, memoization=memoization, Nf=Nf, Nc=Nc)#,Vector{NCube{Int64,Float64,Val(Ndim)}}(undef, 0))
+    MDBM_Problem(f, axes, constraint=constraint, memoization=memoization, Nf=Nf, Nc=Nc, contour_level_fc=contour_level_fc)#,Vector{NCube{Int64,Float64,Val(Ndim)}}(undef, 0))
 end
 
+#notes this keeps the previouse function evaluations
+"""
+    recreate(mdbm::MDBM_Problem; contour_level_fc=[nothing, nothing], axes_new=mdbm.axes)
+
+Create a new `MDBM_Problem` sharing the memoized function evaluation cache of the input `mdbm`.
+This is useful for changing contour levels or axes without re-evaluating the function at existing points.
+
+# Arguments
+- `mdbm`: The existing MDBM problem.
+- `contour_level_fc`: (Optional) New contour levels.
+- `axes_new`: (Optional) New axes definition. Must match the dimension of the original problem.
+"""
+function recreate(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; contour_level_fc=[nothing, nothing],axes_new=mdbm.axes) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+   if N !== length(axes_new) 
+    error("The number of axes must be equal to the dimension N of the MDBM problem.\n  N = $(N), length(axes) = $(length(axes_new))")
+   end
+   axes=Axes(axes_new...)
+   mdbm.fc.memoryacc[]=0 #reset the memory acc
+    MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}(mdbm.fc, Axes(axes...),
+        sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
+            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, mdbm.T01, mdbm.T11pinv)
+end
 
 function Base.show(io::IO, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     println(io, "Multi-Dimensional Bisection Method Problem")
@@ -376,6 +414,8 @@ function Base.show(io::IO, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT
     for k in 1:length(mdbm.axes)
         println(io, "  axis #", k, ": elements: ", length(mdbm.axes[k]), "; elementtype: ", typeof(mdbm.axes[k][1]), "; first: ", mdbm.axes[k][1], "; last: ", mdbm.axes[k][end])
     end
+
+    println(io, "Contour levels: $(mdbm.contour_level_fc)")
     println(io, "number of bracketing n-cubes: ", length(mdbm.ncubes))
     println()
 
@@ -384,7 +424,7 @@ function Base.show(io::IO, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT
         println(io, "number of memoized function call: ", mdbm.fc.memoryacc[])
         ratio = length(mdbm.fc.fvalarg) / prod(length.(mdbm.axes))
         if ratio > 0.0
-            println(io, "Ration of function evaluation compared to 'brute-force method': ", ratio)
+            println(io, "Ratio of function evaluation compared to 'brute-force method': ", ratio)
         end
     else
         println(io, "non-memoized version")
