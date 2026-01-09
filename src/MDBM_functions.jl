@@ -8,32 +8,32 @@ function axdoubling!(ax::Axis)
     ax.ticks[1:end] .= ax.ticks[doubleindex]
 end
 
-
-"""
-    axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[])
-
-Extend parameter space of the selected Axis by prepend and append the grid.
-
-Note, that the resolution and the monotonically is not checked.
-
-# Examples
-extending the second parameter of the mdbm problem:
-```jldoctest
-julia> axesextend!(mymdbm,2,prepend=-6.2:0.05:-2.2,append=2.2:0.2:3);
-```
-"""
-function axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[]) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
-    preplength = length(prepend)
-    if preplength > 0
-        prepend!(mdbm.axes[axisnumber].ticks, prepend)
-        @inbounds for nc in mdbm.ncubes
-            nc.corner[axisnumber] += preplength
-        end
-    end
-    if length(append) > 0
-        Base.append!(mdbm.axes[axisnumber].ticks, append)
-    end
-end
+# # # depraceted TODO: remove it later
+# # """
+# #     axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[])
+# # 
+# # Extend parameter space of the selected Axis by prepend and append the grid.
+# # 
+# # Note, that the resolution and the monotonically is not checked.
+# # 
+# # # Examples
+# # extending the second parameter of the mdbm problem:
+# # ```jldoctest
+# # julia> axesextend!(mymdbm,2,prepend=-6.2:0.05:-2.2,append=2.2:0.2:3);
+# # ```
+# # """
+# # function axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[]) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+# #     preplength = length(prepend)
+# #     if preplength > 0
+# #         prepend!(mdbm.axes[axisnumber].ticks, prepend)
+# #         @inbounds for nc in mdbm.ncubes
+# #             nc.corner[axisnumber] += preplength
+# #         end
+# #     end
+# #     if length(append) > 0
+# #         Base.append!(mdbm.axes[axisnumber].ticks, append)
+# #     end
+# # end
 
 # function corner(nc::NCube{IT,FT,N,Nfc}, T01)::Vector{MVector} where IT where FT where N
 function corner(nc::NCube{IT,FT,N,Nfc}, T01) where {IT,FT,N,Nfc}
@@ -53,13 +53,28 @@ function corner(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {f
 end
 
 
+@inline diff_contour_element(a::Number, b::Number) = a - b
+@inline diff_contour_element(a::Tuple, b::Tuple) = a .- b
+@inline diff_contour_element(a, b) = a
+
+function _apply_contour_offset(vals, c1, c2)
+    map(v -> (diff_contour_element(v[1], c1), diff_contour_element(v[2], c2)), vals)
+end
+
+function apply_contour_offset(vals, contour_levels)
+    c1 = contour_levels[1]
+    c2 = contour_levels[2]
+    _apply_contour_offset(vals, c1, c2)
+end
+
 
 function getcornerval(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}#get it for all
     #getcornerval.(mdbm.ncubes,Ref(mdbm))
 
     funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
     #mdbm.fc(unique(funargs))#prcomputed if it was not done before
-    mdbm.fc.(funargs)
+    #mdbm.fc.(funargs) #- no shift
+    apply_contour_offset(mdbm.fc.(funargs), mdbm.contour_level_fc)
 
     #map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
 end
@@ -70,7 +85,8 @@ function getcornerval(ncube::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,
 
     funargs = map(x -> ((mdbm.axes))(x...), corner(ncube, mdbm.T01))
     #mdbm.fc(unique(funargs))#prcomputed if it was not done before
-    mdbm.fc.(funargs)
+    #mdbm.fc.(funargs) #- no shift
+    apply_contour_offset(mdbm.fc.(funargs), mdbm.contour_level_fc)
 
     # map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), corner(ncubes, mdbm.T01))
 end
@@ -78,7 +94,8 @@ end
 function getcornerval(corners, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     funargs = map(x -> ((mdbm.axes))(x...), corners)
     #mdbm.fc(unique(funargs))#prcomputed if it was not done before
-    mdbm.fc.(funargs)
+    #mdbm.fc.(funargs) #- no shift
+    apply_contour_offset(mdbm.fc.(funargs), mdbm.contour_level_fc)
 
     # map(x -> ((mdbm.fc) ∘ (mdbm.axes))(x...), corners)
 end
@@ -162,7 +179,17 @@ function generate_sub_faces(face, fixed_dims::Vector{Tuple{Int,Bool}})
 end
 
 
+"""
+    interpsubcubesolution!(mdbm::MDBM_Problem; normp=20.0, ncubetolerance=0.5)
 
+Performs high-order interpolation (finding sub-faces) within the solution n-cubes.
+This populates the `posinterp` tree structure in each n-cube, allowing for extraction of detailed geometric paths (e.g., curves in 3D).
+
+# Arguments
+- `mdbm`: The MDBM problem.
+- `normp`: Norm parameter for the internal convergence check.
+- `ncubetolerance`: Tolerance for the internal convergence check.
+"""
 function interpsubcubesolution!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; normp=20.0, ncubetolerance=0.5) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     for nc in mdbm.ncubes
         interpsubcubesolution!(nc, mdbm, normp=normp, ncubetolerance=ncubetolerance)
@@ -550,10 +577,13 @@ function _interpolate!(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fc
         mdbm.fc.(unique!(funargs))#prcomputed if it was not done before -> necessary for the later threaded for loop
     end
 
+# getcornerval(mdbm)#assure precomputation //TODO: maybe not necessary!!!!!!!!!!!!!
+
     #As = MVector{Nfc,FT}(undef)
     #ns = MMatrix{N,Nfc,FT}(undef)
     #for nc in ncubes
-    Threads.@threads for i_nc in 1:length(ncubes)
+     #Threads.@threads 
+   for i_nc in 1:length(ncubes)
         nc = ncubes[i_nc]
         As = MVector{Nfc,FT}(undef)
         ns = MMatrix{N,Nf + Nc,FT}(undef)
@@ -736,6 +766,15 @@ function getinterpolatedsolution(posinterp, corner, axes::Axes{N,aT}) where {N,a
 end
 
 
+"""
+    getinterpolatedgradient(ncubes::Vector{NCube}, mdbm::MDBM_Problem)
+
+Returns the gradients of the function(s) at the interpolated solution points within the provided n-cubes.
+The gradients are normalized relative to the n-cube size.
+
+# Returns
+- A vector of gradients (vectors) for each solution point.
+"""
 function getinterpolatedgradient(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #println("getinterpolatedgradient")
     @inbounds [[
@@ -767,12 +806,13 @@ end
 """
     getevaluatedfunctionvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT})
 
-Provide the functionvalues for all the coordinates where the function is evaluated.
+Provide the functionvalues for all the coordinates where the function is evaluated shifted by the contour level.
 (see: `getevaluatedfunctionvalues`)
 """
 function getevaluatedfunctionvalues(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #[x.funval for x in mdbm.fc.fvalarg]
-    getindex.(getindex.(Ref(mdbm.fc.fvalarg), mdbm.fc.fvalarg.keys), 1)
+    vals = getindex.(getindex.(Ref(mdbm.fc.fvalarg), mdbm.fc.fvalarg.keys), 1)
+    map(v -> diff_contour_element(v, mdbm.contour_level_fc[1]), vals)
 end
 
 """
@@ -1043,6 +1083,142 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
     end
 end
 
+"""
+    axesextend!(mdbm::MDBM_Problem, axisnumber::Integer, newcoordinates::AbstractArray=[], verbosity::Integer=1)
+    axesextend!(mdbm::MDBM_Problem, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[], verbosity::Integer=1)
+
+Extend the parameter space of the selected axis by adding new grid points.
+
+# Arguments
+- `mdbm`: The MDBM problem structure.
+- `axisnumber`: The index of the axis to extend (1 to N).
+- `newcoordinates`: (Optional, positional) An array of new coordinates to add. The function automatically determines whether to prepend or append these based on the monotonicity of the existing axis. Overlapping values are filtered out.
+- `prepend`: (Keyword) Array of values to prepend to the axis.
+- `append`: (Keyword) Array of values to append to the axis.
+- `verbosity`: (Keyword, default=1) Controls warning messages. Set to 0 to suppress warnings about overlapping values or reordering.
+"""
+
+function axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axisnumber::Integer, newcoordinates::AbstractArray=[], verbosity::Integer=1) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+    if isempty(newcoordinates)
+        return nothing
+    end
+    
+    if axisnumber > N || axisnumber < 1
+        error("axisnumber must be between 1 and N=$(N)")
+    end
+
+    ax = mdbm.axes[axisnumber].ticks
+    
+    if isempty(ax)
+        sorted_new = unique(sort(newcoordinates))
+        if verbosity > 0 && (sorted_new != newcoordinates)
+            @warn "The new coordinates were reordered or filtered to maintain monotonicity/uniqueness."
+        end
+        extend_axes!(mdbm, axisnumber, append=sorted_new, verbosity=verbosity)
+        return nothing
+    end
+    
+    # Check monotonicity of existing axis
+    is_increasing = true
+    is_decreasing = true
+    
+    if length(ax) >= 2
+        d = diff(ax)
+        is_increasing = all(x -> x > 0, d)
+        is_decreasing = all(x -> x < 0, d)
+    end
+
+    if !is_increasing && !is_decreasing
+        if verbosity > 0
+            @warn "The axis #$(axisnumber) is not monotonic. Please use the `prepend` and `append` keyword arguments manually."
+        end
+        return nothing
+    end
+
+    # Process newcoordinates
+    # Default to increasing if length < 2
+    if is_increasing
+        sorted_new = unique(sort(newcoordinates))
+        prepend_vec = filter(x -> x < ax[1], sorted_new)
+        append_vec = filter(x -> x > ax[end], sorted_new)
+    else
+        sorted_new = unique(sort(newcoordinates, rev=true))
+        prepend_vec = filter(x -> x > ax[1], sorted_new)
+        append_vec = filter(x -> x < ax[end], sorted_new)
+    end
+
+    if verbosity > 0 && (sorted_new != newcoordinates)
+        @warn "The new coordinates were reordered or filtered to maintain monotonicity/uniqueness."
+    end
+
+    axesextend!(mdbm, axisnumber, prepend=prepend_vec, append=append_vec, verbosity=verbosity)
+end
+
+function axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axisnumber::Integer; prepend::AbstractArray=[], append::AbstractArray=[], verbosity::Integer=1) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+    if axisnumber > N || axisnumber < 1
+        error("axisnumber must be between 1 and N=$(N)")
+    end
+    
+    ax = mdbm.axes[axisnumber]
+    
+    # Handle Prepend
+    if !isempty(prepend)
+        if !isempty(ax.ticks)
+            rmin, rmax = minmax(ax.ticks[1], ax.ticks[end])
+            filtered_prepend = filter(x -> x < rmin || x > rmax, prepend)
+            
+            removed_count = length(prepend) - length(filtered_prepend)
+            if removed_count > 0 && verbosity > 0
+                @warn "Prepend vector contained overlapping values with axis $axisnumber. $removed_count elements were removed."
+            end
+            prepend_to_add = filtered_prepend
+        else
+            prepend_to_add = prepend
+        end
+
+        if !isempty(prepend_to_add)
+            prepend!(ax.ticks, prepend_to_add)
+            preplength = length(prepend_to_add)
+            @inbounds for nc in mdbm.ncubes
+                nc.corner[axisnumber] += preplength
+            end
+        end
+    end
+
+    # Handle Append
+    if !isempty(append)
+        if !isempty(ax.ticks)
+            rmin, rmax = minmax(ax.ticks[1], ax.ticks[end])
+            filtered_append = filter(x -> x < rmin || x > rmax, append)
+            
+            removed_count = length(append) - length(filtered_append)
+            if removed_count > 0 && verbosity > 0
+                @warn "Append vector contained overlapping values with axis $axisnumber. $removed_count elements were removed."
+            end
+            append_to_add = filtered_append
+        else
+            append_to_add = append
+        end
+        
+        if !isempty(append_to_add)
+            Base.append!(ax.ticks, append_to_add)
+        end
+    end
+
+    # Check Monotonicity
+    if length(ax.ticks) >= 2
+        d = diff(ax.ticks)
+        if ! (all(x -> x > 0, d) || all(x -> x < 0, d))
+            if verbosity > 0
+                @warn "The extended axis #$(axisnumber) is not monotonic!"
+            end
+        end
+    end
+
+    return nothing
+end 
+
+
 function index_sorted_in_sorted(a::AbstractVector, b::AbstractVector)::Array{Int64,1}
     # index of a[i] in b (0 if not present)
     # a and b must be sorted
@@ -1091,6 +1267,13 @@ end
 function is_sorted_in_sorted(aVargs::AbstractVector{AT}, bfvalarg::SortedCache{AT,Tuple{RTf,RTc}})::Array{Bool,1} where {AT,RTf,RTc}
     return haskey.(Ref(bfvalarg.data), aVargs)
 end
+
+makezero(::Type{T}) where T = zero(T)
+makezero(::Type{T}) where {T<:Tuple} = ntuple(i -> zero(fieldtype(T, i)), fieldcount(T))
+# value-based
+makezero(x) = makezero(typeof(x))
+# Nothing special-case
+makezero(::Type{Nothing}) = nothing
 
 #TODO: make it faster
 #function fast_diff_sorted!(A::Vector{T}, B::Vector{T}) where T
