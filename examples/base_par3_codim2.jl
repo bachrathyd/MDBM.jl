@@ -13,12 +13,7 @@ mymdbm = MDBM_Problem(foo_par3_codim2, [-3.0:3.0, -3.0:3.0, -3.0:3.0])
 
 
 #@time solve!(mymdbm, 3, verbosity=1) #number of refinements - increase it slightly to see smoother results 
-<<<<<<< HEAD
-@time MDBM.solve!(mymdbm, 3, verbosity=1, normp=1, ncubetolerance=10, checkneighbourNum=1, doThreadprecomp=true)
-@time MDBM.solve!(mymdbm, 1)
-=======
 @time MDBM.solve!(mymdbm, 3, verbosity=1, normp=10, ncubetolerance=0.5, checkneighbourNum=1, doThreadprecomp=true)
->>>>>>> 5105594 (Consecpt testing, Almost working)
 println(mymdbm)
 
 f = Figure(size=(1000, 600))
