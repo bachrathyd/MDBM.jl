@@ -4,7 +4,7 @@
 #using Revise
 using MDBM
 # using Plots - for testing the output
-if false
+#if false
     # ------------ 2D ------------
     function foo_par2_codim1(x, y)
         x^2.0 + y^2.0 - 2.0^2.0
@@ -107,4 +107,4 @@ if false
     solve!(mymdbm, 2, doThreadprecomp=true, verbosity=1)
     xyzw_sol = getinterpolatedsolution(mymdbm)
     # scatter(xyzw_sol[1:3]...,)
-end
+#end

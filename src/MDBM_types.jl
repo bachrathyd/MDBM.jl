@@ -326,8 +326,6 @@ function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc, Nfc, IT=In
     N = length(axes)
     T01 = T01maker(Val(N))
     T11pinv = T11pinvmaker(Val(N))
-
-    println("3 contour_level_fc ", contour_level_fc)
     MDBM_Problem{fcT,N,Nf,Nc,Nfc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
         sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
             PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef), MVector{N,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, T01, T11pinv)
