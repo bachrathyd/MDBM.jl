@@ -56,9 +56,11 @@ mymdbm_shifted=recreate(mymdbm, contour_level_fc=[5.5,nothing],axes_new=[-3.1:3.
 
 xy_sol = getinterpolatedsolution(mymdbm_shifted)
 scatter!(xy_sol..., markersize = 15, color = :blue,marker ='x',strokewidth=3,label = "solution")
+# show the points where the function is evaluated
+xy_val = getevaluatedpoints(mymdbm)
+fval=getevaluatedfunctionvalues(mymdbm)
+scatter!(xy_val...,color=sign.(fval),label = "evaluated")
 
-=======
->>>>>>> 5105594 (Consecpt testing, Almost working)
 
 
 

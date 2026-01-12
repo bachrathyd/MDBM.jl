@@ -305,7 +305,7 @@ end
 function extract_paths_local(nc::NCube)
     extract_paths(nc.posinterp)
 end
-function extract_paths(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function extract_paths(nc::NCube, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     [getinterpolatedsolution.(posloc, Ref(nc.corner),Ref(nc.size), Ref(mdbm.axes)) for posloc in extract_paths_local(nc)]
 end
 
@@ -378,7 +378,7 @@ function issingchange(FunTupleVector::AbstractVector, Nf::Integer, Nc::Integer):
     ])#check for all condition
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{0}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function _interpolate!(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, ::Type{Val{0}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     # println("precompute the missing elemnts toghether!")
     funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(mdbm)))
     if doThreadprecomp && typeof(mdbm.fc) <: MemF  #TODO: It is parallel, but Somehow it is slower!!
@@ -656,7 +656,7 @@ function ncube_error_vector(nc::NCube{IT,FT,N,Nfc}; usecols = 1:size(nc.gradient
     return out
 end
 
-function _interpolate!(ncubes::Vector{<:NCube}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function _interpolate!(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, ::Type{Val{1}}; normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     # println("precompute the missing elemnts toghether!")
     funargs = map(x -> ((mdbm.axes))(x...), Base.Iterators.flatten(corner(ncubes, mdbm.T01)))
     if doThreadprecomp && typeof(mdbm.fc) <: MemF #Memoization is used #TODO: It is parallel, but Somehow it is slower!!
@@ -859,7 +859,7 @@ julia> refinencubes!(mymdbm,[1,1,2])
 """
 # {IT,FT,N,Nfc} where {IT,FT,N,Nfc} 
 #function refinencubes!(ncubes::Vector{<:NCube{IT,FT,N,Nfc}}, directions::Vector{T}) where {T<:Integer,IT,FT,N,Nfc} #where t01T # where IT where FT where N
-function refinencubes!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT},directions::AbstractVector{<:Integer}) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT} #where t01T # where IT where FT where N
+function refinencubes!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT},directions::AbstractVector{<:Integer}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT} #where t01T # where IT where FT where N
     # bring the bracketing cubes locally
     ncubes = mdbm.ncubes
 
@@ -913,7 +913,7 @@ function refinencubes!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT},direct
 end
 
 """
-    getscaled_local_point(nc::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT})
+    getscaled_local_point(nc::NCube{IT,FT,N,Nfc}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT})
     
 """
 function getscaled_local_point(p,nc::NCube{IT,FT,N,Nfc}, axes::Axes{N,aT}) where {IT,FT,N,Nfc,aT}
@@ -992,7 +992,7 @@ function getinterpolatedgradient(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_
 end
 
 
-function getinterpolatedgradient(nc::NCube, mdbm::MDBM_Problem)# where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}
+function getinterpolatedgradient(nc::NCube, mdbm::MDBM_Problem)# where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     @inbounds [[
         (mdbm.axes[i].ticks[nc.corner[i]] * (1.0 .- (nc.gradient[i, fi] .+ 1.0) ./ 2.0) +
          mdbm.axes[i].ticks[nc.corner[i]+nc.size[i]] * ((nc.gradient[i, fi] .+ 1.0) ./ 2.0))
@@ -1146,7 +1146,7 @@ It works only if the dimension of the solution object is larger the zero (the ma
     - `interpolationorder::Int=0`: interpolation order method of the neighbours checked
     - `maxiteration::Int=0~: the max number of steps in the 'continuation-like' exploring. If zero, then infinity steps are allowed
 """
-function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,t01T,t11T,IT,FT,aT}#only for unite size cubes
+function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}#only for unite size cubes
     if isempty(mdbm.ncubes)
         println("There is no bracketing n-cubes to check!")
     else

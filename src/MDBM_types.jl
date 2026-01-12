@@ -330,9 +330,7 @@ function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc, Nfc, IT=In
     println("3 contour_level_fc ", contour_level_fc)
     MDBM_Problem{fcT,N,Nf,Nc,Nfc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
         sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
-            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef),MVector{N,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:])
-            , T01, T11pinv)
-            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, T01, T11pinv)
+            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef), MVector{N,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, T01, T11pinv)
 end
 
 function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
@@ -356,11 +354,11 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
         RTc = type_con[1]#Return Type of the constraint function
     end
     println("Checking memoization ...")
-    
+
     if typeof(f) <: MemF
         println("The function is already memoized: direct useage")
         fun = f
-        memoization=true
+        memoization = true
     else
         println("Creating function with memoization = ", memoization)
         if memoization
@@ -396,15 +394,15 @@ This is useful for changing contour levels or axes without re-evaluating the fun
 - `contour_level_fc`: (Optional) New contour levels.
 - `axes_new`: (Optional) New axes definition. Must match the dimension of the original problem.
 """
-function recreate(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; contour_level_fc=[nothing, nothing],axes_new=mdbm.axes) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
-   if N !== length(axes_new) 
-    error("The number of axes must be equal to the dimension N of the MDBM problem.\n  N = $(N), length(axes) = $(length(axes_new))")
-   end
-   axes=Axes(axes_new...)
-   mdbm.fc.memoryacc[]=0 #reset the memory acc
+function recreate(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; contour_level_fc=[nothing, nothing], axes_new=mdbm.axes) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+    if N !== length(axes_new)
+        error("The number of axes must be equal to the dimension N of the MDBM problem.\n  N = $(N), length(axes) = $(length(axes_new))")
+    end
+    axes = Axes(axes_new...)
+    mdbm.fc.memoryacc[] = 0 #reset the memory acc
     MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}(mdbm.fc, Axes(axes...),
         sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
-            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, mdbm.T01, mdbm.T11pinv)
+            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef), MVector{N,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, mdbm.T01, mdbm.T11pinv)
 end
 
 function Base.show(io::IO, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
