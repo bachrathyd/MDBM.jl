@@ -135,34 +135,6 @@ for _ in 1:3
 
 
 
-#     ##
-#     #--------------------------- Sub-cube interpolation----------------
-# 
-#     #calcuatin the sub-cubes interpolations stored in the mymdbm.ncubes[i].posinterp
-#     @time interpsubcubesolution!(mymdbm,normp=10,ncubetolerance=0.1)
-#     #extracting the resutls to from the 
-#     path2points = extract_paths(mymdbm)
-# 
-#     #extracting the unique points and plotting
-#     puniq = unique(collect(Iterators.flatten(Iterators.flatten(path2points))))
-#     scatter!(ax, getindex.(puniq, 1), getindex.(puniq, 2), label="subface - solution")
-# 
-# 
-# 
-#     #exctracing the simplexes for each ncube
-#     flatened_path2points = collect(Iterators.flatten(path2points))
-#     #eliminating the points with less than 2 points (caused by fininte precision)
-#     true_truflatened_path2points = flatened_path2points[length.(flatened_path2points).==2]
-#     #plotting the lines between the points
-#     lines2plot = [(Point2f(ploc[1]), Point2f(ploc[2])) for ploc in true_truflatened_path2points]
-#     #empty!(ax)
-#     linesegments!(ax, lines2plot, label="subface - connection")
-# 
-# 
-# #    display(GLMakie.Screen(), fig)
-
-
-
 
 end
 ##

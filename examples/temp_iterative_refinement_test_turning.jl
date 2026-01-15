@@ -186,3 +186,5 @@ if false #true#
 
 end
 ##
+
+checkneighbour!(turning_mdbm_prob,maxiteration=20)
