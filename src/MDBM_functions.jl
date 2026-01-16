@@ -641,7 +641,14 @@ function ncube_error_vector!(
 
     # proj = G * (G \ delta)  (least-squares projection onto Col(G))
     proj = G * (G \ out)
-
+    if any(isnan.(proj))
+        proj=ones(FT, N) * 1000.0;# TODO: it should be Inf, but that causes issues downstream
+        #@show G
+        #@show out
+        #@show G \ out
+        #@show proj
+        #println("ncube_error_vector!: projection resulted in NaNs; possibly rank-deficient gradient matrix.")
+    end
     # err = delta − proj
     @inbounds for d in 1:N
         out[d] = proj[d]
@@ -722,12 +729,29 @@ julia> refine!(mymdbm)
 julia> refine!(mymdbm,[1,1,2])
 ```
 """
-function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; directions::Vector{T}=collect(Int64, 1:N)) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,Nfc,t01T,t11T,aT}
-    doubling!(mdbm, directions)
-    refinencubes!(mdbm.ncubes, 1:size(mdbm.ncubes, 1), directions)
+function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
+    directions::Vector{T}=collect(Int64, 1:N),
+    errorvetor_normalization=(x) -> norm(x),
+    refinementratio=1.0, abstol=0.0) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,Nfc,t01T,t11T,aT}
+
+    nc_list = 1:size(mdbm.ncubes, 1)
+    errv_s = [getscaled_local_point(ncube_error_vector(nc), nc, mdbm.axes) for nc in mdbm.ncubes]
+    err_norm = errorvetor_normalization.(errv_s)
+    #TODO: which is the better, selection based on a listing or based on relative errore value
+    #nc_list = nc_list[err_norm.>sort(err_norm)[ceil(IT(length(err_norm)*refinementratio)] .& err_norm.>=abserror]
+    nc_list = nc_list[(err_norm.>=(minimum(err_norm)*(refinementratio)+maximum(err_norm)*(1.0-refinementratio))).&(err_norm.>=abstol)]#0.61803398875
+
+    # if length(nc_list) == 0
+    #     println("No n-cube selected for refinement!")
+    #     #return nothing
+    # end
+
+    doubling!(mdbm, directions, nc_list=nc_list)
+    refinencubes!(mdbm.ncubes, nc_list, directions)
+
     #println("orig")
     #refinencubes!(mdbm, directions)
-    return nothing
+    return length(nc_list)
 end
 
 """
@@ -741,12 +765,17 @@ julia> doubling!(mymdbm)
 julia> doubling!(mymdbm,[1,2])
 ```
 """
-function doubling!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, directions::Vector{T}) where {T<:Integer} where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
-    axdoubling!.(mdbm.axes[directions])
-    @inbounds for nc in mdbm.ncubes
-        for dir in directions
-            nc.corner[dir] = (nc.corner[dir] - 1) * 2 + 1
-            nc.size[dir] *= 2
+function doubling!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, directions::Vector{T}; nc_list=1:size(mdbm.ncubes, 1)) where {T<:Integer} where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+    #axdoubling!.(mdbm.axes[directions])
+    @inbounds for dir in directions
+        #We need to do the doubling if there are cubes which have size 1 in the given direction - necessary for the later refinement
+        if length(nc_list) > 0 && minimum([nc.size[dir] for nc in mdbm.ncubes[nc_list]]) < 2#check if there is any cube (for refinement) which has size 1 in the given direction
+            axdoubling!(mdbm.axes[dir])
+            for nc in mdbm.ncubes
+                nc.corner[dir] = (nc.corner[dir] - 1) * 2 + 1
+                nc.size[dir] *= 2
+                nc.maxcorner[dir] = nc.size[dir] + nc.corner[dir]
+            end
         end
     end
 end
@@ -793,6 +822,7 @@ function refinencubes!(
             i = idxs[t]
             # if IT is not guaranteed integer, use `/= 2` (or `÷= 2` for integer div)
             ncubes[i].size[dir] = ncubes[i].size[dir] ÷ 2
+            ncubes[i].maxcorner[dir] = ncubes[i].size[dir] + ncubes[i].corner[dir]
         end
 
         # 2) append shifted duplicates directly into the tail
@@ -817,12 +847,16 @@ function refinencubes!(
             corner2 = MVector{N,IT}(old.corner)
             corner2[dir] += old.size[dir]              # shift by NEW (halved) size
             size2 = MVector{N,IT}(old.size)
+            maxcorner2 = MVector{N,IT}(corner2 + size2)
             pos2 = PositionTree(parentmp2)       # copy the prevous position tree
             grad2 = MMatrix{N,Nfc,FT}(undef)         # fresh gradient
 
 
             ncubes[start_tail+(t-1)] =
-                NCube{IT,FT,N,Nfc}(corner2, size2, pos2, old.bracketingncube, grad2, deepcopy(parentmp2))
+                NCube{IT,FT,N,Nfc}(corner2, size2, maxcorner2, pos2, old.bracketingncube, grad2, deepcopy(parentmp2))
+
+            #ncubes[start_tail+(t-1)] =
+            #    NCube{IT,FT,N,Nfc}(corner2, size2, pos2, old.bracketingncube, grad2, deepcopy(parentmp2))
         end
 
         # 3) expand the index set to include the just-appended tail block
@@ -845,7 +879,7 @@ function refinencubes!(
 end
 
 
-
+#TODO: do I need both versions? The latter one, could call the upper one with indices=1:length(ncubes)?!?!?! TODO: testing!
 """
      refinencubes!(mdbm::MDBM_Problem, directions::Vector{T})
 
@@ -896,7 +930,8 @@ function refinencubes!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, d
             pos2 = PositionTree(zeros(MVector{N,FT}))        # or whatever default you need
             grad2 = MMatrix{N,constNfc,FT}(undef)
             # 4) construct the new cube with the same bracketing flag (or set it if desired):
-            ncubes[i+NumofNCubes] = NCube{IT,FT,N,Nf + Nc}(corner2, size2, pos2, true, grad2)
+            #ncubes[i+NumofNCubes] = NCube{IT,FT,N,Nf + Nc}(corner2, size2, pos2, true, grad2)
+            ncubes[i+NumofNCubes] = NCube{IT,FT,N,Nf + Nc}(corner2, size2, corner2 + size2, pos2, true, grad2)
         end
         # finally, append all the new ones at once:
 
@@ -1034,44 +1069,48 @@ end
 
 function generateneighbours(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #TODO: Let the user select the method
-    #-------all faceing/cornering neightbours----------------
-    #neighbourind=1:2^length(mdbm.axes) #cornering neightbours also - unnecessary
-    neighbourind = 2 .^ (0:(length(mdbm.axes)-1)) .+ 1 #neighbour only on the side
-    T101 = [-mdbm.T01[neighbourind]..., mdbm.T01[neighbourind]...]
+    if false
+        #-------all faceing/cornering neightbours----------------
+        #neighbourind=1:2^length(mdbm.axes) #cornering neightbours also - unnecessary
+        neighbourind = 2 .^ (0:(length(mdbm.axes)-1)) .+ 1 #neighbour only on the side
+        T101 = [-mdbm.T01[neighbourind]..., mdbm.T01[neighbourind]...]
 
-    nc_neighbour = Array{typeof(mdbm.ncubes[1])}(undef, 0)
-    NumofNCubes = length(ncubes)
-    for iT in 1:length(T101)
-        Base.append!(nc_neighbour, deepcopy(ncubes))
-        for nci in ((1+NumofNCubes*(iT-1)):(NumofNCubes+NumofNCubes*(iT-1)))
-            nc_neighbour[nci].corner[:] = nc_neighbour[nci].corner + T101[iT] .* nc_neighbour[nci].size
+        nc_neighbour = Array{typeof(mdbm.ncubes[1])}(undef, 0)
+        NumofNCubes = length(ncubes)
+        for iT in 1:length(T101)
+            Base.append!(nc_neighbour, deepcopy(ncubes))
+            for nci in ((1+NumofNCubes*(iT-1)):(NumofNCubes+NumofNCubes*(iT-1)))
+                nc_neighbour[nci].corner[:] = nc_neighbour[nci].corner + T101[iT] .* nc_neighbour[nci].size
+                nc_neighbour[nci].maxcorner[:] = nc_neighbour[nci].corner + nc_neighbour[nci].size
+            end
         end
+        #-------all faceing/cornering neightbours----------------
+    else
+
+        #-------direcational neightbours----------------
+        nc_neighbour = Array{typeof(mdbm.ncubes[1])}(undef, 0)
+        Nface = 2^N
+        indpos = [[mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:N]
+        indneg = [[!mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:N]
+        @inbounds for nc in ncubes
+            fcvals = getcornerval(nc, mdbm)
+            for dir in 1:N
+                # indpos=[mdbm.T01[i][dir] for i in 1:Nface]
+                # indneg=[!mdbm.T01[i][dir] for i in 1:Nface]
+                if issingchange(fcvals[indpos[dir]], Nf, Nc)
+                    push!(nc_neighbour, deepcopy(nc))
+                    nc_neighbour[end].corner[dir] += nc_neighbour[end].size[dir]
+                    nc_neighbour[end].maxcorner[dir] = nc_neighbour[end].corner[dir] + nc_neighbour[end].size[dir]
+                end
+                if issingchange(fcvals[indneg[dir]], Nf, Nc)
+                    push!(nc_neighbour, deepcopy(nc))
+                    nc_neighbour[end].corner[dir] -= nc_neighbour[end].size[dir]
+                    nc_neighbour[end].maxcorner[dir] = nc_neighbour[end].corner[dir] + nc_neighbour[end].size[dir]
+                end
+            end
+        end
+        #-------direcational neightbours----------------
     end
-    #-------all faceing/cornering neightbours----------------
-
-
-    # #-------direcational neightbours----------------
-    # nc_neighbour = Array{typeof(mdbm.ncubes[1])}(undef, 0)
-    # Nface = 2^N
-    # indpos = [[mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:N]
-    # indneg = [[!mdbm.T01[i][dir] for i in 1:Nface] for dir in 1:N]
-    # @inbounds for nc in ncubes
-    #     fcvals = getcornerval(nc, mdbm)
-    #     for dir in 1:N
-    #         # indpos=[mdbm.T01[i][dir] for i in 1:Nface]
-    #         # indneg=[!mdbm.T01[i][dir] for i in 1:Nface]
-    #         if issingchange(fcvals[indpos[dir]], Nf, Nc)
-    #             push!(nc_neighbour, deepcopy(nc))
-    #             nc_neighbour[end].corner[dir] += nc_neighbour[end].size[dir]
-    #         end
-    #         if issingchange(fcvals[indneg[dir]], Nf, Nc)
-    #             push!(nc_neighbour, deepcopy(nc))
-    #             nc_neighbour[end].corner[dir] -= nc_neighbour[end].size[dir]
-    #         end
-    #     end
-    # end
-    # #-------direcational neightbours----------------
-
     #  println("Generated $(length(nc_neighbour)) raw.")
     wrap_ncube_periodic!.(nc_neighbour, Ref(mdbm.axes))
     #  #filter!(nc -> !(any(nc.corner .< 1) || any((nc.corner + nc.size) .> [length.(mdbm.axes)...])), nc_neighbour)#remove the overhanging ncubes
@@ -1160,8 +1199,9 @@ function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
             ncubes2check = generateneighbours(ncubes2check, mdbm)
             number_of_generated_ncubes = length(ncubes2check)
             #  deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, mdbm.ncubes))#delete the ones which is already presented
-            #filter!(x -> !(x in ncubes2checked), ncubes2check)
+            #filter!(x -> !(x in ncubes2checked), ncubes2check) # deprecated, only for unite size cubes!!!
             filter!((nc) -> !MDBM.is_overlapping(nc, ncubes2checked), ncubes2check)
+            #deleteat!(ncubes2check,is_overlapping_bulk(ncubes2check, ncubes2checked))
             #deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, ncubes2checked))# delete the ones, whihe were in the list onriginally
             append!(ncubes2checked, deepcopy(ncubes2check))
             # unique!(ncubes2checked) # It should not happen!!!
@@ -1249,7 +1289,12 @@ Refine the `MDBM_Problem` `iteration` times, then perform a neighbour check.
 julia> solve!(mymdbm,4)
 ```
 """
-function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, verbosity=1, doThreadprecomp=true, checkneighbourNum=1,max_negh_iter::Int=Inf) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteration::Int;
+    interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5,
+    errorvetor_normalization=(x) -> norm(x),
+    refinementratio=1.0, abstol=0.0,
+    verbosity=1, doThreadprecomp=true, checkneighbourNum=1, max_negh_iter::Int=10_000) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+
     #checkneighbourNum = 0 : no neighbour check at all
     #checkneighbourNum = 1 : check neighbour only once at the end
     #checkneighbourNum > 1 : check neighbour at every iteration
@@ -1264,16 +1309,20 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
                     print("  $k refine! & interpolate! :  ")
                 end
                 @time begin
-                    refine!(mdbm)
+                    number_of_refindedcubes = refine!(mdbm, errorvetor_normalization=errorvetor_normalization, refinementratio=refinementratio, abstol=abstol)
+                    if number_of_refindedcubes == 0
+                        println(" No more refinement is needed! Stopping at iteration $k.")
+                        break
+                    end
                     interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
                     if checkneighbourNum > 1
-                        checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp,verbosity=verbosity,maxiteration=max_negh_iter)
+                        checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp, verbosity=verbosity, maxiteration=max_negh_iter)
                     end
                 end
             end
             if checkneighbourNum == 1
                 print("           checkneighbour! :  ")
-                @time checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp,verbosity=verbosity,maxiteration=max_negh_iter)
+                @time checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp, verbosity=verbosity, maxiteration=max_negh_iter)
             end
             #print("              interpolate! :  ")#not need
             #@time interpolate!(mdbm, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
@@ -1283,10 +1332,14 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
     else
         interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
         for k = 1:iteration
-            refine!(mdbm)
+            number_of_refindedcubes = refine!(mdbm, errorvetor_normalization=errorvetor_normalization, refinementratio=refinementratio, abstol=abstol)
+            if number_of_refindedcubes == 0
+                println(" No more refinement is needed! Stopping at iteration $k.")
+                break
+            end
             interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
             if checkneighbourNum > 1
-                checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp,maxiteration=max_negh_iter)
+                checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp, maxiteration=max_negh_iter)
             end
         end
         if checkneighbourNum == 1
@@ -1602,29 +1655,84 @@ function sort_sort_merge_with_buffer!(v::Vector{T}, mid=fld(length(v), 2); lt=is
     return v
 end
 
-    # Helper function to check for overlap between two n-cubes
-    function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, nc_B::NCube{IT,FT,N,Nfc}) where {IT,FT,N,Nfc}
-        @inbounds for d in 1:N
-            min_A = nc_A.corner[d]
-            max_A = nc_A.corner[d] + nc_A.size[d]
-            min_B = nc_B.corner[d]
-            max_B = nc_B.corner[d] + nc_B.size[d]
-
-            # If intervals do not overlap on any axis, the cubes do not overlap.
-            # (max_A <= min_B) means A is to the left of B or touches its left boundary.
-            # (min_A >= max_B) means A is to the right of B or touches its right boundary.
-            if max_A <= min_B || min_A >= max_B
-                return false
-            end
+# Helper function to check for overlap between two n-cubes
+function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, nc_B::NCube{IT,FT,N,Nfc}) where {IT,FT,N,Nfc}
+    @inbounds for d in 1:N
+        # min_A = nc_A.corner[d]
+        # #max_A = nc_A.corner[d] + nc_A.size[d]
+        # max_A = nc_A.maxcorner[d]
+        # min_B = nc_B.corner[d]
+        # #max_B = nc_B.corner[d] + nc_B.size[d]
+        # max_B = nc_B.maxcorner[d] 
+        # # If intervals do not overlap on any axis, the cubes do not overlap.
+        # # (max_A <= min_B) means A is to the left of B or touches its left boundary.
+        # # (min_A >= max_B) means A is to the right of B or touches its right boundary.
+        # if max_A <= min_B || min_A >= max_B
+        #     return false
+        # end
+        if nc_A.maxcorner[d] <= nc_B.corner[d] || nc_A.corner[d] >= nc_B.maxcorner[d]
+            return false
         end
-        return true
+    end
+    return true
+
+    #return @inbounds !(any(nc_A.maxcorner .<= nc_B.corner) || any(nc_A.corner .>= nc_B.maxcorner))#this seems to be slightly slower
+end
+
+function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}}) where {IT,FT,N,Nfc}
+    for nc_B in ncube_pool
+        if is_overlapping(nc_A, nc_B)
+            return true
+        end
+    end
+    return false
+end
+
+function is_overlapping_bulk(ncubes_A::Vector{NCube{IT,FT,N,Nfc}}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}}) where {IT,FT,N,Nfc}
+    if isempty(ncubes_A) || isempty(ncube_pool)
+        return falses(length(ncubes_A))
     end
 
-    function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}}) where {IT,FT,N,Nfc}
-        for nc_B in ncube_pool
-            if is_overlapping(nc_A, nc_B)
-                return true
-            end
-        end
-        return false
+    M = length(ncubes_A)
+    P = length(ncube_pool)
+
+    # Extract coordinates into matrices
+    min_coords_A = Matrix{IT}(undef, M, N)
+    max_coords_A = Matrix{IT}(undef, M, N)
+    @inbounds for i in 1:M
+        min_coords_A[i, :] = ncubes_A[i].corner
+        max_coords_A[i, :] = ncubes_A[i].maxcorner
     end
+
+    min_coords_pool = Matrix{IT}(undef, P, N)
+    max_coords_pool = Matrix{IT}(undef, P, N)
+    @inbounds for i in 1:P
+        min_coords_pool[i, :] = ncube_pool[i].corner
+        max_coords_pool[i, :] = ncube_pool[i].maxcorner
+    end
+
+    # Reshape for broadcasting
+    # min_A_b: M x 1 x N
+    # max_A_b: M x 1 x N
+    min_A_b = reshape(min_coords_A, (M, 1, N))
+    max_A_b = reshape(max_coords_A, (M, 1, N))
+
+    # min_pool_b: 1 x P x N
+    # max_pool_b: 1 x P x N
+    min_pool_b = reshape(min_coords_pool, (1, P, N))
+    max_pool_b = reshape(max_coords_pool, (1, P, N))
+
+    # Perform vectorized overlap check. Overlap on each axis.
+    # overlap_matrix will be an M x P x N boolean array.
+    # Overlap condition on one axis: (max_A > min_B) && (min_A < max_B)
+    overlap_matrix = (max_A_b .> min_pool_b) .& (min_A_b .< max_pool_b)
+
+    # An overlap in all N dimensions means the cubes overlap.
+    # `all(dims=3)` reduces the last dimension, resulting in an M x P matrix.
+    cube_overlaps = all(overlap_matrix, dims=3)
+
+    # For each ncube in ncubes_A, check if it overlaps with *any* ncube in ncube_pool.
+    # `any(dims=2)` reduces the second dimension. Result is an M-element BitVector.
+    return vec(any(cube_overlaps, dims=2))
+end
+

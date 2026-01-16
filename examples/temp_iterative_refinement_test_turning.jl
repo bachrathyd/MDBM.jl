@@ -48,8 +48,9 @@ w_axis = MDBM.Axis(LinRange(-1.2, 1.2, 5), "w") # axial depth of cut
 #prob = MDBM_Problem((Ω, w, ωc) -> char_eq(Ω, w, ωc; ζ=0.02), [Ω_axis, w_axis, ωc_axis])
 turning_mdbm_prob = MDBM_Problem(char_eq, [Ω_axis, w_axis, ωc_axis])
 
-solve!(turning_mdbm_prob, 2, verbosity=3, checkneighbourNum=2)# check neighbour at every iteration
+@time solve!(turning_mdbm_prob, 4, verbosity=0, checkneighbourNum=2)# check neighbour at every iteration
 ##
+@time for _ in 1:6
 nc_list = 1:size(turning_mdbm_prob.ncubes, 1)
 
 
@@ -148,7 +149,7 @@ fig
 ax_top.yscale = log10
 ax_bot.yscale = log10
 
-@show turning_mdbm_prob
+#@show turning_mdbm_prob
 
 
 
@@ -186,25 +187,35 @@ if false #true#
 
 end
 fig
+end
 ##
-@time checkneighbour!(turning_mdbm_prob,maxiteration=15,verbosity=3);
+@time checkneighbour!(turning_mdbm_prob,maxiteration=15,verbosity=0);
+nothing
+#3.7  - with extra variable - first run
+#4.5 - 5.3 sec - with extra variable - further runs
 
-#@profview  checkneighbour!(turning_mdbm_prob,maxiteration=20,verbosity=0);
-MDBM.getcornerval(turning_mdbm_prob.ncubes[1], turning_mdbm_prob)
-allcorners = MDBM.corner(turning_mdbm_prob.ncubes, turning_mdbm_prob.T01)
+#5.2 - 3.5 sec - without extra variable - first run
+#4.4 - 5.3 sec - without extra variable - further runs
+# @profview  checkneighbour!(turning_mdbm_prob,maxiteration=20,verbosity=0);
 
-x = reduce(vcat, [[[turning_mdbm_prob.axes[1][xy[1]] for xy in getindex(nc, [1, 2, 4, 3, 7, 8, 6, 5, 1])]..., NaN] for nc in allcorners])
-y = reduce(vcat, [[[turning_mdbm_prob.axes[2][xy[2]] for xy in getindex(nc, [1, 2, 4, 3, 7, 8, 6, 5, 1])]..., NaN] for nc in allcorners])
-z = reduce(vcat, [[[turning_mdbm_prob.axes[3][xy[3]] for xy in getindex(nc, [1, 2, 4, 3, 7, 8, 6, 5, 1])]..., NaN] for nc in allcorners])
+# bulk - slow
 
-empty!(ax2D)
-lines!(ax2D, x, y)
-
-xy_sol = getinterpolatedsolution(turning_mdbm_prob)           # (xs, ys)
-# --- left: overwrite each run ---
-empty!(ax3D)
-#lines!(ax3D, x, y,z)
-scatter!(ax3D, xy_sol...)#, markersize=ms
-#scatter!(ax, xy_sol...; color=nc_size, colormap=:reds)#, markersize=ms,
-
-fig
+#MDBM.getcornerval(turning_mdbm_prob.ncubes[1], turning_mdbm_prob)
+#allcorners = MDBM.corner(turning_mdbm_prob.ncubes, turning_mdbm_prob.T01)
+#
+#x = reduce(vcat, [[[turning_mdbm_prob.axes[1][xy[1]] for xy in getindex(nc, [1, 2, 4, 3, 7, 8, 6, 5, 1])]..., NaN] for nc in allcorners])
+#y = reduce(vcat, [[[turning_mdbm_prob.axes[2][xy[2]] for xy in getindex(nc, [1, 2, 4, 3, 7, 8, 6, 5, 1])]..., NaN] for nc in allcorners])
+#z = reduce(vcat, [[[turning_mdbm_prob.axes[3][xy[3]] for xy in getindex(nc, [1, 2, 4, 3, 7, 8, 6, 5, 1])]..., NaN] for nc in allcorners])
+#
+#empty!(ax2D)
+#lines!(ax2D, x, y)
+#
+#xy_sol = getinterpolatedsolution(turning_mdbm_prob)           # (xs, ys)
+## --- left: overwrite each run ---
+#empty!(ax3D)
+##lines!(ax3D, x, y,z)
+#scatter!(ax3D, xy_sol...)#, markersize=ms
+##scatter!(ax, xy_sol...; color=nc_size, colormap=:reds)#, markersize=ms,
+#
+#fig
+#

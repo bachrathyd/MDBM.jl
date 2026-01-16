@@ -1,5 +1,3 @@
-5+5
-using Revise
 using MDBM
 using GLMakie
 using LinearAlgebra
@@ -43,11 +41,11 @@ function foo_par2_codim1(x, y)
 end
 
 mymdbm = MDBM_Problem(foo_par2_codim1, [-3.0:0.5:3.0, -3.0:0.5:3.0])
-solve!(mymdbm, 1, interpolationorder=1, ncubetolerance=0.0)
+solve!(mymdbm, 2, interpolationorder=1, ncubetolerance=0.0)
 
-# Itrative refinement ------------------------------------
+## Itrative refinement ------------------------------------
 
-for _ in 1:3
+for _ in 1:4
     nc_list = 1:size(mymdbm.ncubes, 1)
 
 
@@ -80,6 +78,11 @@ for _ in 1:3
 
 
 end
+                 ncube_layers[]  = [    
+                     mymdbm.ncubes,
+            ]
+
+
 ##-----------------------
 
 
@@ -180,4 +183,76 @@ display(fig)
 
 println("\nSetup complete. Click on a blue cube in the plot to highlight it (red) and its neighbours (green).")
 
-#checkneighbour!(mymdbm)
+
+##
+solve!(mymdbm, 2, interpolationorder=1, ncubetolerance=0.0)
+
+                 ncube_layers[]  = [    
+                     mymdbm.ncubes,
+            ]
+##
+mymdbm_start=deepcopy(mymdbm);
+##
+mymdbm=deepcopy(mymdbm_start);
+#
+mdbm=deepcopy(mymdbm)
+mymdbm=deepcopy(mdbm)
+empty!(mymdbm.ncubes)
+append!(mymdbm.ncubes,deepcopy(mdbm.ncubes[1:30]))
+
+    ncube_layers[]  = [    
+                     mymdbm.ncubes,
+            ];
+
+@time checkneighbour!(mymdbm,verbosity=0);
+@profview  checkneighbour!(mymdbm,verbosity=0);
+    ncube_layers[]  = [    
+                     mymdbm.ncubes,
+            ];
+
+
+##
+mdbm=deepcopy(mymdbm)
+interpolationorder=1
+maxiteration=0
+normp=20.0
+ncubetolerance=0.5
+doThreadprecomp=true
+#function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}#only for unite size cubes
+   @time if isempty(mdbm.ncubes)
+        println("There is no bracketing n-cubes to check!")
+    else
+        ncubes2check = deepcopy(mdbm.ncubes)
+        ncubes2checked = deepcopy(mdbm.ncubes)
+        numberofiteration = 0
+        while !isempty(ncubes2check) && (maxiteration == 0 ? true : numberofiteration < maxiteration)
+       
+            numberofiteration += 1
+            ncubes2check = MDBM.generateneighbours(ncubes2check, mdbm)
+            #  deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, mdbm.ncubes))#delete the ones which is already presented
+            #filter!(x -> !(x in ncubes2checked), ncubes2check)
+            filter!((nc) -> !MDBM.is_overlapping(nc, ncubes2checked), ncubes2check)
+            #deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, ncubes2checked))# delete the ones, whihe were in the list onriginally
+            append!(ncubes2checked, deepcopy(ncubes2check))
+            # unique!(ncubes2checked) # It should not happen!!!
+            MDBM._interpolate!(ncubes2check, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp) #remove the non-bracketing, only proper new bracketing cubes remained
+            Base.append!(mdbm.ncubes, deepcopy(ncubes2check))
+
+            ncube_layers[]  = [    
+                     mymdbm.ncubes,
+                ncubes2check,
+                ncubes2checked,
+            ]
+
+
+
+            unique!(mdbm.ncubes) # It should not happen!!!
+             sort!(mdbm.ncubes; alg=QuickSort)# it is enough to sort it at the end
+        end
+
+        sort!(mdbm.ncubes; alg=QuickSort)# it is enough to sort it at the end
+
+    end
+#end
+
+

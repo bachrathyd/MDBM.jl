@@ -263,6 +263,7 @@ PositionTree(p::AbstractArray{T}) where {T} = PositionTree(MVector{length(p),T}(
 struct NCube{IT,FT,N,Nfc}
     corner::MVector{N,IT} #"bottom-left" #Integer index of the axis
     size::MVector{N,IT}#Integer index of the axis
+    maxcorner::MVector{N,IT}#"top-right" #Integer index of the axis - TODO: redundant, usde to reduced CPU time, but it was slower due to the extra memory usage
     posinterp::PositionTree{N,FT}#relative coordinate within the cube "(-1:1)" range
     bracketingncube::Bool
     gradient::MMatrix{N,Nfc,FT}#relative coordinate within the cube "(-1:1)" range
@@ -327,7 +328,7 @@ function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc, Nfc, IT=In
     T01 = T01maker(Val(N))
     T11pinv = T11pinvmaker(Val(N))
     MDBM_Problem{fcT,N,Nf,Nc,Nfc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
-        sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
+        sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),MVector{N,IT}([x...] .+ ones(IT, length(x))),
             PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef), MVector{N,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, T01, T11pinv)
 end
 
@@ -399,7 +400,7 @@ function recreate(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; contou
     axes = Axes(axes_new...)
     mdbm.fc.memoryacc[] = 0 #reset the memory acc
     MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}(mdbm.fc, Axes(axes...),
-        sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
+        sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),MVector{N,IT}([x...] .+ ones(IT, length(x))),
             PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef), MVector{N,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, mdbm.T01, mdbm.T11pinv)
 end
 

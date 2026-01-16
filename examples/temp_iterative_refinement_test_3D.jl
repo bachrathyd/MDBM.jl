@@ -11,7 +11,7 @@ GLMakie.activate!(; title="2 parameters, codimension 1")
 function foo_par2_codim1(x, y, z)
     pow = 7.0
     pow = 1.3
-    #pow=0.75
+    pow=0.75
     abs(x)^pow + abs(y)^pow + abs(z)^pow - 2.0^pow
     #sin(x*5)-y+z+ 0.1 * x * y
 end
@@ -48,7 +48,7 @@ end
 MDBM.refinencubes!(mymdbm.ncubes, nc_list, [1, 2, 3])
 MDBM.interpolate!(mymdbm, interpolationorder=1)
 
-#@time checkneighbour!(mymdbm,verbosity=3);
+@time checkneighbour!(mymdbm,verbosity=3);
 #@time solve!(mymdbm, 1,interpolationorder=1)
 
 # --- create once ---
