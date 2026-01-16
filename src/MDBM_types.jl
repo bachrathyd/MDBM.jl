@@ -351,14 +351,14 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
     else
         RTc = type_con[1]#Return Type of the constraint function
     end
-    println("Checking memoization ...")
+    #println("Checking memoization ...")
 
     if typeof(f) <: MemF
         println("The function is already memoized: direct useage")
         fun = f
         memoization = true
     else
-        println("Creating function with memoization = ", memoization)
+        #println("Creating function with memoization = ", memoization)
         if memoization
             fun = MemF(f, constraint, SortedCache{AT,Tuple{RTf,RTc}}(), RTf, RTc, AT)#Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
         else

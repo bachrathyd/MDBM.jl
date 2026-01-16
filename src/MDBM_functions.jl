@@ -1147,7 +1147,7 @@ It works only if the dimension of the solution object is larger the zero (the ma
     - `interpolationorder::Int=0`: interpolation order method of the neighbours checked
     - `maxiteration::Int=0~: the max number of steps in the 'continuation-like' exploring. If zero, then infinity steps are allowed
 """
-function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}#only for unite size cubes
+function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true, verbosity=0) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}#only for unite size cubes
     if isempty(mdbm.ncubes)
         println("There is no bracketing n-cubes to check!")
     else
@@ -1158,6 +1158,7 @@ function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
 
             numberofiteration += 1
             ncubes2check = generateneighbours(ncubes2check, mdbm)
+            number_of_generated_ncubes = length(ncubes2check)
             #  deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, mdbm.ncubes))#delete the ones which is already presented
             #filter!(x -> !(x in ncubes2checked), ncubes2check)
             filter!((nc) -> !MDBM.is_overlapping(nc, ncubes2checked), ncubes2check)
@@ -1167,6 +1168,9 @@ function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
             _interpolate!(ncubes2check, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp) #remove the non-bracketing, only proper new bracketing cubes remained
             Base.append!(mdbm.ncubes, deepcopy(ncubes2check))
 
+            if verbosity > 2
+                println("Neighbour check iteration $numberofiteration: generated: $(number_of_generated_ncubes), found $(length(ncubes2check)) new bracketing n-cubes, total number of n-cubes: $(length(mdbm.ncubes))")
+            end
             # unique!(mdbm.ncubes) # It should not happen!!!
             # sort!(mdbm.ncubes; alg=QuickSort)# it is enough to sort it at the end
         end
@@ -1245,7 +1249,7 @@ Refine the `MDBM_Problem` `iteration` times, then perform a neighbour check.
 julia> solve!(mymdbm,4)
 ```
 """
-function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, verbosity=1, doThreadprecomp=true, checkneighbourNum=1) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5, verbosity=1, doThreadprecomp=true, checkneighbourNum=1,max_negh_iter::Int=Inf) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     #checkneighbourNum = 0 : no neighbour check at all
     #checkneighbourNum = 1 : check neighbour only once at the end
     #checkneighbourNum > 1 : check neighbour at every iteration
@@ -1263,13 +1267,13 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
                     refine!(mdbm)
                     interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
                     if checkneighbourNum > 1
-                        checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+                        checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp,verbosity=verbosity,maxiteration=max_negh_iter)
                     end
                 end
             end
             if checkneighbourNum == 1
                 print("           checkneighbour! :  ")
-                @time checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+                @time checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp,verbosity=verbosity,maxiteration=max_negh_iter)
             end
             #print("              interpolate! :  ")#not need
             #@time interpolate!(mdbm, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
@@ -1282,7 +1286,7 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
             refine!(mdbm)
             interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
             if checkneighbourNum > 1
-                checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
+                checkneighbour!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp,maxiteration=max_negh_iter)
             end
         end
         if checkneighbourNum == 1
@@ -1307,7 +1311,7 @@ Extend the parameter space of the selected axis by adding new grid points.
 - `verbosity`: (Keyword, default=1) Controls warning messages. Set to 0 to suppress warnings about overlapping values or reordering.
 """
 
-function axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axisnumber::Integer, newcoordinates::AbstractArray=[], verbosity::Integer=1) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+function axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axisnumber::Integer, newcoordinates::AbstractArray; verbosity::Integer=1) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
     if isempty(newcoordinates)
         return nothing
     end
@@ -1323,7 +1327,7 @@ function axesextend!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, axi
         if verbosity > 0 && (sorted_new != newcoordinates)
             @warn "The new coordinates were reordered or filtered to maintain monotonicity/uniqueness."
         end
-        extend_axes!(mdbm, axisnumber, append=sorted_new, verbosity=verbosity)
+        axesextend!(mdbm, axisnumber, append=sorted_new, verbosity=verbosity)
         return nothing
     end
 

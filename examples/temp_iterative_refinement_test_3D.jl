@@ -11,15 +11,15 @@ GLMakie.activate!(; title="2 parameters, codimension 1")
 function foo_par2_codim1(x, y, z)
     pow = 7.0
     pow = 1.3
-    #pow=0.2
+    #pow=0.75
     abs(x)^pow + abs(y)^pow + abs(z)^pow - 2.0^pow
     #sin(x*5)-y+z+ 0.1 * x * y
 end
+foo_par2_codim1(0.0, 0.0, 0.5)
 
-
-mymdbm = MDBM_Problem(foo_par2_codim1, [-0.01:3.0, -0.02:3.0, -0.02:3.0])
-mymdbm = MDBM_Problem(foo_par2_codim1, [-1.06:3.0, -1.09:3.0, -1.1:3.0])
-@time solve!(mymdbm, 2, interpolationorder=1)#number of refinements - increase it slightly to see smoother results 
+#mymdbm = MDBM_Problem(foo_par2_codim1, [-0.01:3.0, -0.02:3.0, -0.02:3.0])
+mymdbm = MDBM_Problem(foo_par2_codim1, [-1.06:0.5:3.0, -1.09:0.5:3.0, -1.1:0.5:3.0])
+@time solve!(mymdbm, 2, interpolationorder=1, normp=90.0, ncubetolerance=-0.05)#number of refinements - increase it slightly to see smoother results 
 
 ##
 nc_list = 1:size(mymdbm.ncubes, 1)
@@ -35,7 +35,6 @@ nc_list = nc_list[err_norm.>=(minimum(err_norm)+maximum(err_norm))*0.5]#0.618033
 #axesextend!(mymdbm,1, -2.0:0.1:2)#both prepend and append automatically (overlapping values are eliminated)
 
 
-
 # TODO: this is a problem, doubling must be done for only the cubes which hase size 1, and at the location where it is size 1 - this way i will not be able to tell the size (diffference) of the neighbouring n-cubes
 # We doulging only in the directions where refinement is needed
 nc_size_minimum_in_the_list = minimum([minimum(nc.size) for nc in mymdbm.ncubes[nc_list]])
@@ -49,6 +48,7 @@ end
 MDBM.refinencubes!(mymdbm.ncubes, nc_list, [1, 2, 3])
 MDBM.interpolate!(mymdbm, interpolationorder=1)
 
+#@time checkneighbour!(mymdbm,verbosity=3);
 #@time solve!(mymdbm, 1,interpolationorder=1)
 
 # --- create once ---
@@ -121,8 +121,6 @@ ax_bot.yscale = log10
 @show mymdbm
 
 
-#checkneighbour!(mymdbm)
-#@show mymdbm
 
 
 
@@ -158,3 +156,4 @@ if false#true# false
 
 end
 ##
+fig

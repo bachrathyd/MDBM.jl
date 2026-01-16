@@ -1,3 +1,4 @@
+5+5
 using Revise
 using MDBM
 using GLMakie
@@ -138,11 +139,13 @@ on(events(ax).mousebutton, priority=2) do event
         # Find the clicked n-cube
         clicked_idx = find_clicked_ncube_idx(Point2f(mx, my), mymdbm)
 
+
         if clicked_idx !== nothing
             println("Selected n-cube index: ", clicked_idx)
 
             selected_ncube = mymdbm.ncubes[clicked_idx]
             neighbours = MDBM.generateneighbours([selected_ncube], mymdbm)
+            neighbours = MDBM.generateneighbours(mymdbm.ncubes, mymdbm)
 
             neighbours_filter = deepcopy(neighbours)
             #  filter!(x -> !(x in mymdbm.ncubes), neighbours_filter)
@@ -155,7 +158,7 @@ on(events(ax).mousebutton, priority=2) do event
             new_layers = [
                 mymdbm.ncubes,
                 [selected_ncube],
-                neighbours,
+                #neighbours,
                 neighbours_filter,
             ]
             # 
