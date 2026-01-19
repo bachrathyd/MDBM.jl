@@ -50,7 +50,7 @@ turning_mdbm_prob = MDBM_Problem(char_eq, [Ω_axis, w_axis, ωc_axis])
 
 @time solve!(turning_mdbm_prob, 4, verbosity=0, checkneighbourNum=2)# check neighbour at every iteration
 ##
-@time for _ in 1:6
+@time for _ in 1:3
 nc_list = 1:size(turning_mdbm_prob.ncubes, 1)
 
 
@@ -80,7 +80,7 @@ MDBM.interpolate!(turning_mdbm_prob, interpolationorder=1)
 
 # --- create once ---
 if !@isdefined(fig)
-    fig = Figure(size=(2300, 1350))
+    fig = Figure(size=(1800, 1050))
 
     # grid: left spans two rows; right has two stacked axes
     ax3D = GLMakie.Axis3(fig[1, 1], title="Result")
@@ -189,13 +189,17 @@ end
 fig
 end
 ##
+println("Checking neighbours...end")
 @time checkneighbour!(turning_mdbm_prob,maxiteration=15,verbosity=0);
+
+
 nothing
 #3.7  - with extra variable - first run
 #4.5 - 5.3 sec - with extra variable - further runs
 
 #5.2 - 3.5 sec - without extra variable - first run
 #4.4 - 5.3 sec - without extra variable - further runs
+
 # @profview  checkneighbour!(turning_mdbm_prob,maxiteration=20,verbosity=0);
 
 # bulk - slow

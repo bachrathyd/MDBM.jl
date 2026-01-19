@@ -640,14 +640,17 @@ function ncube_error_vector!(
     G = @view nc.gradient[:, usecols]
 
     # proj = G * (G \ delta)  (least-squares projection onto Col(G))
-    if ArrayInterface.issingular(G)
-        #println("ncube_error_vector!: gradient matrix is rank-deficient; using NaN projection.")
-        proj = ones(FT, N) * 1000.0;# TODO: it should be Inf, but that causes issues downstream
+    # Define threshold
+    threshold = 1 / (1000 * eps(FT))
+
+    if any(isnan.(G)) || cond(G) > threshold
+        # Matrix is singular or too ill-conditioned to invert safely
+        proj = ones(FT, N) * 1000.0 # far away from the n-cube center
     else
         proj = G * (G \ out)
     end
     if any(isnan.(proj))
-        proj=ones(FT, N) * 1000.0;# TODO: it should be Inf, but that causes issues downstream
+        proj = ones(FT, N) * 1000.0# TODO: it should be Inf, but that causes issues downstream
         #@show G
         #@show out
         #@show G \ out
@@ -737,7 +740,8 @@ julia> refine!(mymdbm,[1,1,2])
 function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
     directions::Vector{T}=collect(Int64, 1:N),
     errorvetor_normalization=(x) -> norm(x),
-    refinementratio=1.0, abstol=0.0) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,Nfc,t01T,t11T,aT}
+    refinementratio=1.0, abstol=0.0,
+    local_max_diff_level::IT=1, global_max_diff_level::IT=5, itrative::Bool=true, verbosity::IT=0) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,Nfc,t01T,t11T,aT}
 
     nc_list = 1:size(mdbm.ncubes, 1)
     errv_s = [getscaled_local_point(ncube_error_vector(nc), nc, mdbm.axes) for nc in mdbm.ncubes]
@@ -753,7 +757,7 @@ function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
 
     doubling!(mdbm, directions, nc_list=nc_list)
     refinencubes!(mdbm.ncubes, nc_list, directions)
-
+    cube_unify!(mdbm.ncubes, mdbm.ncubes, local_max_diff_level=local_max_diff_level, global_max_diff_level=global_max_diff_level, itrative=itrative, verbosity=verbosity)
     #println("orig")
     #refinencubes!(mdbm, directions)
     return length(nc_list)
@@ -782,6 +786,61 @@ function doubling!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, direc
                 nc.maxcorner[dir] = nc.size[dir] + nc.corner[dir]
             end
         end
+    end
+end
+
+
+function cube_unify!(ncubes_A::Vector{NCube{IT,FT,N,Nfc}}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}};
+    local_max_diff_level::IT=1, global_max_diff_level::IT=5, itrative::Bool=true, verbosity::IT=0) where {IT,FT,N,Nfc}
+    do_more_iteration = true
+    while do_more_iteration
+        do_more_iteration = false
+        for d in 1:N
+            nc_list = 1:size(ncubes_A, 1)
+            ncs_size_all = [nc.size for nc in ncubes_A]
+            if verbosity > 2
+                println("----- Dimension $d -----")
+            end
+            nc_size_in_d = getindex.(ncs_size_all, d)
+            if verbosity > 2
+                println("Size in dimension $d: ", unique(sort(nc_size_in_d)))
+            end
+
+            min_size = minimum(nc_size_in_d)
+            if verbosity > 2
+                println("Min size in dimension $d: ", min_size)
+            end
+            max_size = maximum(nc_size_in_d)
+            if verbosity > 2
+                println("Max size in dimension $d: ", max_size)
+            end
+            #fix global max differnce in size
+            do_refine = nc_size_in_d .> (min_size * 2^global_max_diff_level)
+            nc_size_in_d[do_refine]
+            if verbosity > 2
+                println("Refining ", sum(do_refine), " n-cubes in dimension $d")
+            end
+
+            #check if the neghbours have size difference more than local_max_diff_level
+            for (i_n, nc) in enumerate(ncubes_A)
+                # The neighbouring n-cubes (based on the overlapping test with inflation=1)
+                ov = MDBM.overlapping_vector(nc, ncube_pool, inflate=1)
+                o_nc = ncube_pool[ov]
+                #size of the neighbouring n-cubes in dimension d
+                maximum_neighbour_size_in_d = [nc_o.size[d] for nc_o in o_nc]
+                if nc.size[d] > minimum(maximum_neighbour_size_in_d) * 2^local_max_diff_level
+                    do_refine[i_n] = true
+                end
+            end
+            if verbosity > 2
+                println("Refining ", sum(do_refine), " n-cubes in dimension $d with neighbour check, too")
+            end
+
+            refinencubes!(ncubes_A, nc_list[do_refine], [d])
+            do_more_iteration = do_more_iteration || (any(do_refine) && itrative)
+
+        end
+
     end
 end
 
@@ -1205,8 +1264,13 @@ function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
             number_of_generated_ncubes = length(ncubes2check)
             #  deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, mdbm.ncubes))#delete the ones which is already presented
             #filter!(x -> !(x in ncubes2checked), ncubes2check) # deprecated, only for unite size cubes!!!
+
+            #println("One-by-one overlapping check...")
             filter!((nc) -> !MDBM.is_overlapping(nc, ncubes2checked), ncubes2check)
-            #deleteat!(ncubes2check,is_overlapping_bulk(ncubes2check, ncubes2checked))
+
+            # println("Bulk overlapping check...")# it seems to be slower :-(
+            # deleteat!(ncubes2check, is_overlapping_bulk(ncubes2check, ncubes2checked))
+
             #deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, ncubes2checked))# delete the ones, whihe were in the list onriginally
             append!(ncubes2checked, deepcopy(ncubes2check))
             # unique!(ncubes2checked) # It should not happen!!!
@@ -1283,6 +1347,7 @@ function triangulation(DT1::Array{Tuple{Int64,Int64}})::Array{Tuple{Int64,Int64,
 
 end
 
+
 """
     solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteration::Int; interpolationorder::Int=1)
 
@@ -1298,7 +1363,8 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
     interpolationorder::Int=1, normp=20.0, ncubetolerance=0.5,
     errorvetor_normalization=(x) -> norm(x),
     refinementratio=1.0, abstol=0.0,
-    verbosity=1, doThreadprecomp=true, checkneighbourNum=1, max_negh_iter::Int=10_000) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+    verbosity=1, doThreadprecomp=true, checkneighbourNum=1, max_negh_iter::Int=10_000,
+    local_max_diff_level::IT=1, global_max_diff_level::IT=5, itrative::Bool=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
 
     #checkneighbourNum = 0 : no neighbour check at all
     #checkneighbourNum = 1 : check neighbour only once at the end
@@ -1314,7 +1380,8 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
                     print("  $k refine! & interpolate! :  ")
                 end
                 @time begin
-                    number_of_refindedcubes = refine!(mdbm, errorvetor_normalization=errorvetor_normalization, refinementratio=refinementratio, abstol=abstol)
+                    number_of_refindedcubes = refine!(mdbm, errorvetor_normalization=errorvetor_normalization, refinementratio=refinementratio, abstol=abstol,
+                        local_max_diff_level=local_max_diff_level, global_max_diff_level=global_max_diff_level, itrative=itrative,verbosity=verbosity)
                     if number_of_refindedcubes == 0
                         println(" No more refinement is needed! Stopping at iteration $k.")
                         break
@@ -1337,7 +1404,8 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
     else
         interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
         for k = 1:iteration
-            number_of_refindedcubes = refine!(mdbm, errorvetor_normalization=errorvetor_normalization, refinementratio=refinementratio, abstol=abstol)
+            number_of_refindedcubes = refine!(mdbm, errorvetor_normalization=errorvetor_normalization, refinementratio=refinementratio, abstol=abstol,
+                        local_max_diff_level=local_max_diff_level, global_max_diff_level=global_max_diff_level, itrative=itrative,verbosity=verbosity)
             if number_of_refindedcubes == 0
                 println(" No more refinement is needed! Stopping at iteration $k.")
                 break
@@ -1661,7 +1729,7 @@ function sort_sort_merge_with_buffer!(v::Vector{T}, mid=fld(length(v), 2); lt=is
 end
 
 # Helper function to check for overlap between two n-cubes
-function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, nc_B::NCube{IT,FT,N,Nfc}) where {IT,FT,N,Nfc}
+function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, nc_B::NCube{IT,FT,N,Nfc}; inflate::IT=0) where {IT,FT,N,Nfc}
     @inbounds for d in 1:N
         # min_A = nc_A.corner[d]
         # #max_A = nc_A.corner[d] + nc_A.size[d]
@@ -1675,7 +1743,7 @@ function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, nc_B::NCube{IT,FT,N,Nfc}) wher
         # if max_A <= min_B || min_A >= max_B
         #     return false
         # end
-        if nc_A.maxcorner[d] <= nc_B.corner[d] || nc_A.corner[d] >= nc_B.maxcorner[d]
+        if nc_A.maxcorner[d] .+ inflate <= nc_B.corner[d] || nc_A.corner[d] .- inflate >= nc_B.maxcorner[d]
             return false
         end
     end
@@ -1684,16 +1752,20 @@ function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, nc_B::NCube{IT,FT,N,Nfc}) wher
     #return @inbounds !(any(nc_A.maxcorner .<= nc_B.corner) || any(nc_A.corner .>= nc_B.maxcorner))#this seems to be slightly slower
 end
 
-function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}}) where {IT,FT,N,Nfc}
+function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}}; inflate::IT=0) where {IT,FT,N,Nfc}
     for nc_B in ncube_pool
-        if is_overlapping(nc_A, nc_B)
+        if is_overlapping(nc_A, nc_B; inflate=inflate)
             return true
         end
     end
     return false
 end
 
-function is_overlapping_bulk(ncubes_A::Vector{NCube{IT,FT,N,Nfc}}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}}) where {IT,FT,N,Nfc}
+function overlapping_vector(nc_A::NCube{IT,FT,N,Nfc}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}}; inflate::IT=0) where {IT,FT,N,Nfc}
+    return [is_overlapping(nc_A, nc_B; inflate=inflate) for nc_B in ncube_pool]
+end
+
+function overlapping_matirx_bulk(ncubes_A::Vector{NCube{IT,FT,N,Nfc}}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}}; inflate::IT=0) where {IT,FT,N,Nfc}
     if isempty(ncubes_A) || isempty(ncube_pool)
         return falses(length(ncubes_A))
     end
@@ -1705,8 +1777,8 @@ function is_overlapping_bulk(ncubes_A::Vector{NCube{IT,FT,N,Nfc}}, ncube_pool::V
     min_coords_A = Matrix{IT}(undef, M, N)
     max_coords_A = Matrix{IT}(undef, M, N)
     @inbounds for i in 1:M
-        min_coords_A[i, :] = ncubes_A[i].corner
-        max_coords_A[i, :] = ncubes_A[i].maxcorner
+        min_coords_A[i, :] = ncubes_A[i].corner .- inflate
+        max_coords_A[i, :] = ncubes_A[i].maxcorner .+ inflate
     end
 
     min_coords_pool = Matrix{IT}(undef, P, N)
@@ -1736,8 +1808,13 @@ function is_overlapping_bulk(ncubes_A::Vector{NCube{IT,FT,N,Nfc}}, ncube_pool::V
     # `all(dims=3)` reduces the last dimension, resulting in an M x P matrix.
     cube_overlaps = all(overlap_matrix, dims=3)
 
-    # For each ncube in ncubes_A, check if it overlaps with *any* ncube in ncube_pool.
-    # `any(dims=2)` reduces the second dimension. Result is an M-element BitVector.
-    return vec(any(cube_overlaps, dims=2))
+    return cube_overlaps
 end
 
+
+function is_overlapping_bulk(ncubes_A::Vector{NCube{IT,FT,N,Nfc}}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}}; inflate::IT=0) where {IT,FT,N,Nfc}
+    # For each ncube in ncubes_A, check if it overlaps with *any* ncube in ncube_pool.
+    # `any(dims=2)` reduces the second dimension. Result is an M-element BitVector.
+    cube_overlaps = overlapping_matirx_bulk(ncubes_A, ncube_pool, inflate)
+    return vec(any(cube_overlaps, dims=2))
+end

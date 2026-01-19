@@ -1,3 +1,4 @@
+using Revise
 using MDBM
 using GLMakie
 using LinearAlgebra
@@ -44,13 +45,13 @@ end
 # solve!(mymdbm, 2, interpolationorder=1, ncubetolerance=0.0)
 
 function foo_par2_codim1(x, y)
-    norm([x,y],110.9999)-1.0#((x^2.0 + y) - 1.0^2.0)*x #TODO: test with this function, too
+    norm([x, y], 110.9999) - 1.0#((x^2.0 + y) - 1.0^2.0)*x #TODO: test with this function, too
     #((x^2.0 + y) - 1.0^2.0)*x #TODO: test with this function, too
 end
 
 # refines only n-cubes where the error is greater than 50% betweenthe worst and best error
 mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
-@time solve!(mymdbm, 1,refinementratio=0.5)#7)#number of refinements - increase it
+@time solve!(mymdbm, 1, refinementratio=0.5)#7)#number of refinements - increase it
 ## Itrative refinement ------------------------------------
 
 for _ in 1:2
@@ -84,9 +85,9 @@ for _ in 1:2
     #@time solve!(mymdbm, 1,interpolationorder=1)
 
 
-         #        ncube_layers[]  = [    
-         #            mymdbm.ncubes,
-         #   ]
+    #        ncube_layers[]  = [    
+    #            mymdbm.ncubes,
+    #   ]
 
 end
 
@@ -143,8 +144,8 @@ ncube_to_idx = Dict(nc => i for (i, nc) in enumerate(mymdbm.ncubes))
 
 # 6. Register the mouse click event
 on(events(ax).mousebutton, priority=2) do event
-    
-@time solve!(mymdbm, 1,refinementratio=0.5)#7)#number of refinements - increase it
+
+    #@time solve!(mymdbm, 1,refinementratio=0.5)#7)#number of refinements - increase it
     if event.button == Mouse.left && event.action == Mouse.press
         # Get mouse position in data coordinates
         mx, my = mouseposition(ax)
@@ -157,6 +158,8 @@ on(events(ax).mousebutton, priority=2) do event
             println("Selected n-cube index: ", clicked_idx)
 
             selected_ncube = mymdbm.ncubes[clicked_idx]
+
+            MDBM.is_overlapping_bulk(selected_ncube, mymdbm.ncubes, inflate=2)
             neighbours = MDBM.generateneighbours([selected_ncube], mymdbm)
             neighbours = MDBM.generateneighbours(mymdbm.ncubes, mymdbm)
 
@@ -167,7 +170,7 @@ on(events(ax).mousebutton, priority=2) do event
             # Layer 1: All cubes
             # Layer 2: The selected cube
             # Layer 3: The neighbours
-         
+
             new_layers = [
                 mymdbm.ncubes,
                 [selected_ncube],
@@ -186,7 +189,22 @@ on(events(ax).mousebutton, priority=2) do event
     end
     # Let other events pass through
     return Consume(false)
+
+
 end
+
+fig
+##
+@time solve!(mymdbm, 1, refinementratio=0.5,local_max_diff_level=1,global_max_diff_level=6)#7)#number of refinements - increase it
+fig
+##
+mdbm_temp=deepcopy(mymdbm)
+#mymdbm=deepcopy(mdbm_temp)
+
+MDBM.cube_unify!( mymdbm.ncubes, mymdbm.ncubes)
+@time solve!(mymdbm, 0, refinementratio=0.5)#7)#number of refinements - increase it
+
+
 
 # Display the figure
 display(fig)

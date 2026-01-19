@@ -10,13 +10,13 @@ function foo_par2_codim1(x, y)
     #((x^2.0 + y) - 1.0^2.0)*x #TODO: test with this function, too
 end
 
-## refines all bracketing n-cubes
-#mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
-#@time solve!(mymdbm, 4)#number of refinements - increase it slightly to see smoother results 
+# refines all bracketing n-cubes
+mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
+@time solve!(mymdbm, 4)#number of refinements - increase it slightly to see smoother results 
 
-# # refines only n-cubes where the error is greater than 50% betweenthe worst and best error
-# mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
-# @time solve!(mymdbm, 10,refinementratio=0.5)#7)#number of refinements - increase it slightly to see smoother results 
+ # refines only n-cubes where the error is greater than 50% betweenthe worst and best error
+ mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
+ @time solve!(mymdbm, 20,refinementratio=0.5)#7)#number of refinements - increase it slightly to see smoother results 
 
 # # refines only n-cubes where the error is greater than an absolute tolerance
 # # stops if the number of refinement is reached or all n-cubes are below the tolerance
