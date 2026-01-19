@@ -640,7 +640,12 @@ function ncube_error_vector!(
     G = @view nc.gradient[:, usecols]
 
     # proj = G * (G \ delta)  (least-squares projection onto Col(G))
-    proj = G * (G \ out)
+    if ArrayInterface.issingular(G)
+        #println("ncube_error_vector!: gradient matrix is rank-deficient; using NaN projection.")
+        proj = ones(FT, N) * 1000.0;# TODO: it should be Inf, but that causes issues downstream
+    else
+        proj = G * (G \ out)
+    end
     if any(isnan.(proj))
         proj=ones(FT, N) * 1000.0;# TODO: it should be Inf, but that causes issues downstream
         #@show G

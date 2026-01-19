@@ -35,17 +35,25 @@ function find_clicked_ncube_idx(pos, mdbm)
 end
 
 # 1. Define the problem and solve it to get a set of n-cubes
+# function foo_par2_codim1(x, y)
+#     pow = 3
+#     abs(x)^pow + abs(y)^pow - 2.0^pow
+# end
+# 
+# mymdbm = MDBM_Problem(foo_par2_codim1, [-3.0:0.5:3.0, -3.0:0.5:3.0])
+# solve!(mymdbm, 2, interpolationorder=1, ncubetolerance=0.0)
+
 function foo_par2_codim1(x, y)
-    pow = 3
-    abs(x)^pow + abs(y)^pow - 2.0^pow
+    norm([x,y],110.9999)-1.0#((x^2.0 + y) - 1.0^2.0)*x #TODO: test with this function, too
+    #((x^2.0 + y) - 1.0^2.0)*x #TODO: test with this function, too
 end
 
-mymdbm = MDBM_Problem(foo_par2_codim1, [-3.0:0.5:3.0, -3.0:0.5:3.0])
-solve!(mymdbm, 2, interpolationorder=1, ncubetolerance=0.0)
-
+# refines only n-cubes where the error is greater than 50% betweenthe worst and best error
+mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
+@time solve!(mymdbm, 1,refinementratio=0.5)#7)#number of refinements - increase it
 ## Itrative refinement ------------------------------------
 
-for _ in 1:4
+for _ in 1:2
     nc_list = 1:size(mymdbm.ncubes, 1)
 
 
@@ -76,11 +84,11 @@ for _ in 1:4
     #@time solve!(mymdbm, 1,interpolationorder=1)
 
 
+         #        ncube_layers[]  = [    
+         #            mymdbm.ncubes,
+         #   ]
 
 end
-                 ncube_layers[]  = [    
-                     mymdbm.ncubes,
-            ]
 
 
 ##-----------------------
@@ -135,6 +143,8 @@ ncube_to_idx = Dict(nc => i for (i, nc) in enumerate(mymdbm.ncubes))
 
 # 6. Register the mouse click event
 on(events(ax).mousebutton, priority=2) do event
+    
+@time solve!(mymdbm, 1,refinementratio=0.5)#7)#number of refinements - increase it
     if event.button == Mouse.left && event.action == Mouse.press
         # Get mouse position in data coordinates
         mx, my = mouseposition(ax)
@@ -182,77 +192,35 @@ end
 display(fig)
 
 println("\nSetup complete. Click on a blue cube in the plot to highlight it (red) and its neighbours (green).")
-
-
-##
-solve!(mymdbm, 2, interpolationorder=1, ncubetolerance=0.0)
-
-                 ncube_layers[]  = [    
-                     mymdbm.ncubes,
-            ]
-##
-mymdbm_start=deepcopy(mymdbm);
-##
-mymdbm=deepcopy(mymdbm_start);
-#
-mdbm=deepcopy(mymdbm)
-mymdbm=deepcopy(mdbm)
-empty!(mymdbm.ncubes)
-append!(mymdbm.ncubes,deepcopy(mdbm.ncubes[1:30]))
-
-    ncube_layers[]  = [    
-                     mymdbm.ncubes,
-            ];
-
-@time checkneighbour!(mymdbm,verbosity=0);
-@profview  checkneighbour!(mymdbm,verbosity=0);
-    ncube_layers[]  = [    
-                     mymdbm.ncubes,
-            ];
-
-
-##
-mdbm=deepcopy(mymdbm)
-interpolationorder=1
-maxiteration=0
-normp=20.0
-ncubetolerance=0.5
-doThreadprecomp=true
-#function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; interpolationorder::Int=1, maxiteration::Int=0, normp=20.0, ncubetolerance=0.5, doThreadprecomp=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}#only for unite size cubes
-   @time if isempty(mdbm.ncubes)
-        println("There is no bracketing n-cubes to check!")
-    else
-        ncubes2check = deepcopy(mdbm.ncubes)
-        ncubes2checked = deepcopy(mdbm.ncubes)
-        numberofiteration = 0
-        while !isempty(ncubes2check) && (maxiteration == 0 ? true : numberofiteration < maxiteration)
-       
-            numberofiteration += 1
-            ncubes2check = MDBM.generateneighbours(ncubes2check, mdbm)
-            #  deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, mdbm.ncubes))#delete the ones which is already presented
-            #filter!(x -> !(x in ncubes2checked), ncubes2check)
-            filter!((nc) -> !MDBM.is_overlapping(nc, ncubes2checked), ncubes2check)
-            #deleteat!(ncubes2check, is_sorted_in_sorted(ncubes2check, ncubes2checked))# delete the ones, whihe were in the list onriginally
-            append!(ncubes2checked, deepcopy(ncubes2check))
-            # unique!(ncubes2checked) # It should not happen!!!
-            MDBM._interpolate!(ncubes2check, mdbm, Val{interpolationorder}, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp) #remove the non-bracketing, only proper new bracketing cubes remained
-            Base.append!(mdbm.ncubes, deepcopy(ncubes2check))
-
-            ncube_layers[]  = [    
-                     mymdbm.ncubes,
-                ncubes2check,
-                ncubes2checked,
-            ]
-
-
-
-            unique!(mdbm.ncubes) # It should not happen!!!
-             sort!(mdbm.ncubes; alg=QuickSort)# it is enough to sort it at the end
-        end
-
-        sort!(mdbm.ncubes; alg=QuickSort)# it is enough to sort it at the end
-
-    end
-#end
-
-
+# 
+# 
+# ##
+# solve!(mymdbm, 2, interpolationorder=1, ncubetolerance=0.0)
+# 
+#                  ncube_layers[]  = [    
+#                      mymdbm.ncubes,
+#             ]
+# ##
+# mymdbm_start=deepcopy(mymdbm);
+# ##
+# mymdbm=deepcopy(mymdbm_start);
+# #
+# mdbm=deepcopy(mymdbm)
+# mymdbm=deepcopy(mdbm)
+# empty!(mymdbm.ncubes)
+# append!(mymdbm.ncubes,deepcopy(mdbm.ncubes[1:30]))
+# 
+#     ncube_layers[]  = [    
+#                      mymdbm.ncubes,
+#             ];
+# 
+# @time checkneighbour!(mymdbm,verbosity=0);
+# @profview  checkneighbour!(mymdbm,verbosity=0);
+#     ncube_layers[]  = [    
+#                      mymdbm.ncubes,
+#             ];
+# 
+# 
+# ##
+# 
+# 
