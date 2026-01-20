@@ -622,13 +622,14 @@ Returns `out`.
 function ncube_error_vector!(
     out::AbstractVector{FT},
     nc::NCube{IT,FT,N,Nfc};
+    reference_point=nc.parentmidpointposinterp,
     usecols=1:size(nc.gradient, 2),
 ) where {IT,FT,N,Nfc}
 
     @inbounds begin
         # delta := parent ξ  −  child ξ
         for d in 1:N
-            out[d] = nc.parentmidpointposinterp[d] - nc.posinterp.p[d]
+            out[d] = reference_point[d] - nc.posinterp.p[d]
         end
     end
 
@@ -665,9 +666,9 @@ function ncube_error_vector!(
 end
 
 # convenience wrapper returning an MVector (if you prefer a non-bang version)
-function ncube_error_vector(nc::NCube{IT,FT,N,Nfc}; usecols=1:size(nc.gradient, 2)) where {IT,FT,N,Nfc}
+function ncube_error_vector(nc::NCube{IT,FT,N,Nfc}; reference_point=nc.parentmidpointposinterp, usecols=1:size(nc.gradient, 2)) where {IT,FT,N,Nfc}
     out = MVector{N,eltype(nc.parentmidpointposinterp)}(undef)
-    ncube_error_vector!(out, nc; usecols=usecols)
+    ncube_error_vector!(out, nc; reference_point=reference_point, usecols=usecols)
     return out
 end
 
@@ -741,15 +742,39 @@ function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
     directions::Vector{T}=collect(Int64, 1:N),
     errorvetor_normalization=(x) -> norm(x),
     refinementratio=1.0, abstol=0.0,
-    local_max_diff_level::IT=1, global_max_diff_level::IT=5, itrative::Bool=true, verbosity::IT=0) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,Nfc,t01T,t11T,aT}
+    local_max_diff_level::IT=1, global_max_diff_level::IT=8, itrative::Bool=true, verbosity::IT=0) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,Nfc,t01T,t11T,aT}
 
     nc_list = 1:size(mdbm.ncubes, 1)
-    errv_s = [getscaled_local_point(ncube_error_vector(nc), nc, mdbm.axes) for nc in mdbm.ncubes]
-    err_norm = errorvetor_normalization.(errv_s)
-    #TODO: which is the better, selection based on a listing or based on relative errore value
-    #nc_list = nc_list[err_norm.>sort(err_norm)[ceil(IT(length(err_norm)*refinementratio)] .& err_norm.>=abserror]
-    nc_list = nc_list[(err_norm.>=(minimum(err_norm)*(refinementratio)+maximum(err_norm)*(1.0-refinementratio))).&(err_norm.>=abstol)]#0.61803398875
 
+    #TODO: error definition, which one it the better?!?! based on parent midpoint or based on neighbouring n-cube
+    # cons: parnet base: sharp coreners fromed by "stratigt" lines, leads to problesm (the error seems to be small)
+    if true
+        #Error: based on parent midpoint
+        errv_s = [getscaled_local_point(ncube_error_vector(nc), nc, mdbm.axes) for nc in mdbm.ncubes]
+        err_norm = errorvetor_normalization.(errv_s)
+    else
+        #Error: based on differnce with neighbouring n-cube
+        # The neighbouring n-cubes (based on the overlapping test with inflation=1)
+        err_norm = zeros(FT, length(mdbm.ncubes))
+        for (i_nc, nc) in enumerate(mdbm.ncubes)
+            ov = MDBM.overlapping_vector(nc, mdbm.ncubes, inflate=1)
+            o_nc = mdbm.ncubes[ov]
+            errv_s_loc = [getscaled_local_point(ncube_error_vector(nc, reference_point=nc_o.posinterp.p), nc, mdbm.axes) for nc_o in o_nc]
+            err_norm_loc = errorvetor_normalization.(errv_s_loc)
+            err_norm[i_nc] = maximum(err_norm_loc)
+        end
+    end
+
+    #TODO: which is the better?!?!?! Selection based on a listing or based on relative errore value
+    # Don't sure. Let the user select
+    if false
+        #error above the weighted average of the min and max error
+        nc_list = nc_list[(err_norm.>=(minimum(err_norm)*(refinementratio)+maximum(err_norm)*(1.0-refinementratio))).&(err_norm.>=abstol)]#0.61803398875
+    else
+        #error above the percentile of the error values
+        separeating_error_value = sort(err_norm,rev=true)[IT(ceil(length(err_norm) * refinementratio))]
+        nc_list = nc_list[(err_norm.>=separeating_error_value).&(err_norm.>=abstol)]#0.61803398875
+    end
     # if length(nc_list) == 0
     #     println("No n-cube selected for refinement!")
     #     #return nothing
@@ -791,7 +816,7 @@ end
 
 
 function cube_unify!(ncubes_A::Vector{NCube{IT,FT,N,Nfc}}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}};
-    local_max_diff_level::IT=1, global_max_diff_level::IT=5, itrative::Bool=true, verbosity::IT=0) where {IT,FT,N,Nfc}
+    local_max_diff_level::IT=1, global_max_diff_level::IT=8, itrative::Bool=true, verbosity::IT=0) where {IT,FT,N,Nfc}
     do_more_iteration = true
     while do_more_iteration
         do_more_iteration = false
@@ -1364,7 +1389,7 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
     errorvetor_normalization=(x) -> norm(x),
     refinementratio=1.0, abstol=0.0,
     verbosity=1, doThreadprecomp=true, checkneighbourNum=1, max_negh_iter::Int=10_000,
-    local_max_diff_level::IT=1, global_max_diff_level::IT=5, itrative::Bool=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+    local_max_diff_level::IT=1, global_max_diff_level::IT=8, itrative::Bool=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
 
     #checkneighbourNum = 0 : no neighbour check at all
     #checkneighbourNum = 1 : check neighbour only once at the end
@@ -1381,7 +1406,7 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
                 end
                 @time begin
                     number_of_refindedcubes = refine!(mdbm, errorvetor_normalization=errorvetor_normalization, refinementratio=refinementratio, abstol=abstol,
-                        local_max_diff_level=local_max_diff_level, global_max_diff_level=global_max_diff_level, itrative=itrative,verbosity=verbosity)
+                        local_max_diff_level=local_max_diff_level, global_max_diff_level=global_max_diff_level, itrative=itrative, verbosity=verbosity)
                     if number_of_refindedcubes == 0
                         println(" No more refinement is needed! Stopping at iteration $k.")
                         break
@@ -1405,7 +1430,7 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
         interpolate!(mdbm, interpolationorder=interpolationorder, normp=normp, ncubetolerance=ncubetolerance, doThreadprecomp=doThreadprecomp)
         for k = 1:iteration
             number_of_refindedcubes = refine!(mdbm, errorvetor_normalization=errorvetor_normalization, refinementratio=refinementratio, abstol=abstol,
-                        local_max_diff_level=local_max_diff_level, global_max_diff_level=global_max_diff_level, itrative=itrative,verbosity=verbosity)
+                local_max_diff_level=local_max_diff_level, global_max_diff_level=global_max_diff_level, itrative=itrative, verbosity=verbosity)
             if number_of_refindedcubes == 0
                 println(" No more refinement is needed! Stopping at iteration $k.")
                 break

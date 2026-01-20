@@ -45,7 +45,6 @@ module MDBM
 using StaticArrays
 using LinearAlgebra
 using FunctionWrappers
-using ArrayInterface
 
 using PrecompileTools: @setup_workload, @compile_workload
 
