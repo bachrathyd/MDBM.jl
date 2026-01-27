@@ -742,47 +742,53 @@ function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
     directions::Vector{T}=collect(Int64, 1:N),
     errorvetor_normalization=(x) -> norm(x),
     refinementratio=1.0, abstol=0.0,
-    local_max_diff_level::IT=1, global_max_diff_level::IT=8, itrative::Bool=true, verbosity::IT=0) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,Nfc,t01T,t11T,aT}
+    local_max_diff_level::IT=0, global_max_diff_level::IT=8, itrative::Bool=true, verbosity::IT=0) where {T<:Integer,fcT,IT,FT,N,Nf,Nc,Nfc,t01T,t11T,aT}
 
     nc_list = 1:size(mdbm.ncubes, 1)
 
-    #TODO: error definition, which one it the better?!?! based on parent midpoint or based on neighbouring n-cube
-    # cons: parnet base: sharp coreners fromed by "stratigt" lines, leads to problesm (the error seems to be small)
-    if true
-        #Error: based on parent midpoint
-        errv_s = [getscaled_local_point(ncube_error_vector(nc), nc, mdbm.axes) for nc in mdbm.ncubes]
-        err_norm = errorvetor_normalization.(errv_s)
-    else
-        #Error: based on differnce with neighbouring n-cube
-        # The neighbouring n-cubes (based on the overlapping test with inflation=1)
-        err_norm = zeros(FT, length(mdbm.ncubes))
-        for (i_nc, nc) in enumerate(mdbm.ncubes)
-            ov = MDBM.overlapping_vector(nc, mdbm.ncubes, inflate=1)
-            o_nc = mdbm.ncubes[ov]
-            errv_s_loc = [getscaled_local_point(ncube_error_vector(nc, reference_point=nc_o.posinterp.p), nc, mdbm.axes) for nc_o in o_nc]
-            err_norm_loc = errorvetor_normalization.(errv_s_loc)
-            err_norm[i_nc] = maximum(err_norm_loc)
+    if refinementratio < 1.0
+        #TODO: error definition, which one it the better?!?! based on parent midpoint or based on neighbouring n-cube
+        # cons: parnet base: sharp coreners fromed by "stratigt" lines, leads to problesm (the error seems to be small)
+        if true
+            #Error: based on parent midpoint
+            errv_s = [getscaled_local_point(ncube_error_vector(nc), nc, mdbm.axes) for nc in mdbm.ncubes]
+            err_norm = errorvetor_normalization.(errv_s)
+        else
+            #Error: based on differnce with neighbouring n-cube
+            # The neighbouring n-cubes (based on the overlapping test with inflation=1)
+            err_norm = zeros(FT, length(mdbm.ncubes))
+            for (i_nc, nc) in enumerate(mdbm.ncubes)
+                ov = MDBM.overlapping_vector(nc, mdbm.ncubes, inflate=1)
+                o_nc = mdbm.ncubes[ov]
+                errv_s_loc = [getscaled_local_point(ncube_error_vector(nc, reference_point=nc_o.posinterp.p), nc, mdbm.axes) for nc_o in o_nc]
+                err_norm_loc = errorvetor_normalization.(errv_s_loc)
+                err_norm[i_nc] = maximum(err_norm_loc)
+            end
         end
-    end
 
-    #TODO: which is the better?!?!?! Selection based on a listing or based on relative errore value
-    # Don't sure. Let the user select
-    if false
-        #error above the weighted average of the min and max error
-        nc_list = nc_list[(err_norm.>=(minimum(err_norm)*(refinementratio)+maximum(err_norm)*(1.0-refinementratio))).&(err_norm.>=abstol)]#0.61803398875
-    else
-        #error above the percentile of the error values
-        separeating_error_value = sort(err_norm,rev=true)[IT(ceil(length(err_norm) * refinementratio))]
-        nc_list = nc_list[(err_norm.>=separeating_error_value).&(err_norm.>=abstol)]#0.61803398875
+        #TODO: which is the better?!?!?! Selection based on a listing or based on relative errore value
+        # Don't sure. Let the user select
+        if false
+            #error above the weighted average of the min and max error
+            nc_list = nc_list[(err_norm.>=(minimum(err_norm)*(refinementratio)+maximum(err_norm)*(1.0-refinementratio))).&(err_norm.>=abstol)]#0.61803398875
+        else
+            #error above the percentile of the error values
+            separeating_error_value = sort(err_norm, rev=true)[IT(ceil(length(err_norm) * refinementratio))]
+            nc_list = nc_list[(err_norm.>=separeating_error_value).&(err_norm.>=abstol)]#0.61803398875
+        end
+        # if length(nc_list) == 0
+        #     println("No n-cube selected for refinement!")
+        #     #return nothing
+        # end
     end
-    # if length(nc_list) == 0
-    #     println("No n-cube selected for refinement!")
-    #     #return nothing
-    # end
-
     doubling!(mdbm, directions, nc_list=nc_list)
     refinencubes!(mdbm.ncubes, nc_list, directions)
-    cube_unify!(mdbm.ncubes, mdbm.ncubes, local_max_diff_level=local_max_diff_level, global_max_diff_level=global_max_diff_level, itrative=itrative, verbosity=verbosity)
+    if local_max_diff_level > 0
+        if verbosity > 0
+            println("Unifying n-cubes with local max diff level = $local_max_diff_level and global max diff level = $global_max_diff_level")
+        end
+        cube_unify!(mdbm.ncubes, mdbm.ncubes, local_max_diff_level=local_max_diff_level, global_max_diff_level=global_max_diff_level, itrative=itrative, verbosity=verbosity)
+    end
     #println("orig")
     #refinencubes!(mdbm, directions)
     return length(nc_list)
@@ -816,7 +822,7 @@ end
 
 
 function cube_unify!(ncubes_A::Vector{NCube{IT,FT,N,Nfc}}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}};
-    local_max_diff_level::IT=1, global_max_diff_level::IT=8, itrative::Bool=true, verbosity::IT=0) where {IT,FT,N,Nfc}
+    local_max_diff_level::IT=0, global_max_diff_level::IT=8, itrative::Bool=true, verbosity::IT=0) where {IT,FT,N,Nfc}
     do_more_iteration = true
     while do_more_iteration
         do_more_iteration = false
@@ -1389,7 +1395,7 @@ function solve!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}, iteratio
     errorvetor_normalization=(x) -> norm(x),
     refinementratio=1.0, abstol=0.0,
     verbosity=1, doThreadprecomp=true, checkneighbourNum=1, max_negh_iter::Int=10_000,
-    local_max_diff_level::IT=1, global_max_diff_level::IT=8, itrative::Bool=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+    local_max_diff_level::IT=0, global_max_diff_level::IT=8, itrative::Bool=true) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
 
     #checkneighbourNum = 0 : no neighbour check at all
     #checkneighbourNum = 1 : check neighbour only once at the end
@@ -1755,25 +1761,26 @@ end
 
 # Helper function to check for overlap between two n-cubes
 function is_overlapping(nc_A::NCube{IT,FT,N,Nfc}, nc_B::NCube{IT,FT,N,Nfc}; inflate::IT=0) where {IT,FT,N,Nfc}
-    @inbounds for d in 1:N
-        # min_A = nc_A.corner[d]
-        # #max_A = nc_A.corner[d] + nc_A.size[d]
-        # max_A = nc_A.maxcorner[d]
-        # min_B = nc_B.corner[d]
-        # #max_B = nc_B.corner[d] + nc_B.size[d]
-        # max_B = nc_B.maxcorner[d] 
-        # # If intervals do not overlap on any axis, the cubes do not overlap.
-        # # (max_A <= min_B) means A is to the left of B or touches its left boundary.
-        # # (min_A >= max_B) means A is to the right of B or touches its right boundary.
-        # if max_A <= min_B || min_A >= max_B
-        #     return false
-        # end
-        if nc_A.maxcorner[d] .+ inflate <= nc_B.corner[d] || nc_A.corner[d] .- inflate >= nc_B.maxcorner[d]
-            return false
-        end
-    end
-    return true
+    #  @inbounds for d in 1:N
+    #      # min_A = nc_A.corner[d]
+    #      # #max_A = nc_A.corner[d] + nc_A.size[d]
+    #      # max_A = nc_A.maxcorner[d]
+    #      # min_B = nc_B.corner[d]
+    #      # #max_B = nc_B.corner[d] + nc_B.size[d]
+    #      # max_B = nc_B.maxcorner[d] 
+    #      # # If intervals do not overlap on any axis, the cubes do not overlap.
+    #      # # (max_A <= min_B) means A is to the left of B or touches its left boundary.
+    #      # # (min_A >= max_B) means A is to the right of B or touches its right boundary.
+    #      # if max_A <= min_B || min_A >= max_B
+    #      #     return false
+    #      # end
+    #      if nc_A.maxcorner[d] .+ inflate <= nc_B.corner[d] || nc_A.corner[d] .- inflate >= nc_B.maxcorner[d]
+    #          return false
+    #      end
+    #  end
+    #  return true
 
+    !any([nc_A.maxcorner .+ inflate .<= nc_B.corner; nc_A.corner .- inflate .>= nc_B.maxcorner])
     #return @inbounds !(any(nc_A.maxcorner .<= nc_B.corner) || any(nc_A.corner .>= nc_B.maxcorner))#this seems to be slightly slower
 end
 
