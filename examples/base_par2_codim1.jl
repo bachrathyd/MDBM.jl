@@ -16,7 +16,7 @@ mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
 
  # refines only n-cubes where the error is greater than 50% betweenthe worst and best error
  mymdbm = MDBM_Problem(foo_par2_codim1, [-3.1:3.0, -3.1:3.0])
- @time solve!(mymdbm, 20,refinementratio=0.5)#7)#number of refinements - increase it slightly to see smoother results 
+ @time solve!(mymdbm, 12,refinementratio=0.5)#7)#number of refinements - increase it slightly to see smoother results 
 
 # # refines only n-cubes where the error is greater than an absolute tolerance
 # # stops if the number of refinement is reached or all n-cubes are below the tolerance
@@ -32,7 +32,7 @@ ax1=GLMakie.Axis(f[1, 1]; xminorticks = mymdbm.axes[1].ticks, yminorticks  = mym
 
 # n-cube interpolation
 xy_sol = getinterpolatedsolution(mymdbm)
-scatter!(xy_sol..., markersize = 15, color = :red,marker ='x',strokewidth=3,label = "solution")
+scatter!(xy_sol..., markersize = 12, color = :red,marker ='x',strokewidth=3,label = "solution")
 
 
 
@@ -52,7 +52,7 @@ axesextend!(mymdbm,1, -10:0.1:10)#both prepend and append automatically (overlap
 axesextend!(mymdbm,2, -10:0.1:10)#both prepend and append automatically (overlapping values are eliminated)
 solve!(mymdbm, 2) #no new refinements, it basically just check the neightbours and estend the exsisting solution similarly to continuation
 xy_sol = getinterpolatedsolution(mymdbm)
-scatter!(xy_sol..., markersize = 15, color = :red,marker ='x',strokewidth=3,label = "solution")
+scatter!(xy_sol..., markersize = 12, color = :red,marker ='x',strokewidth=3,label = "solution")
 
 f
 # show the points where the function is evaluated

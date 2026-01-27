@@ -1,6 +1,6 @@
 name = "MDBM"
 uuid = "dd61e66b-39ce-57b0-8813-509f78be4b4d"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Daniel Bachrathy"]
 
 [deps]
