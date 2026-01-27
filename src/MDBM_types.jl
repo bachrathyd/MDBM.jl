@@ -263,9 +263,11 @@ PositionTree(p::AbstractArray{T}) where {T} = PositionTree(MVector{length(p),T}(
 struct NCube{IT,FT,N,Nfc}
     corner::MVector{N,IT} #"bottom-left" #Integer index of the axis
     size::MVector{N,IT}#Integer index of the axis
+    maxcorner::MVector{N,IT}#"top-right" #Integer index of the axis - TODO: redundant, usde to reduced CPU time, but it was slower due to the extra memory usage
     posinterp::PositionTree{N,FT}#relative coordinate within the cube "(-1:1)" range
     bracketingncube::Bool
     gradient::MMatrix{N,Nfc,FT}#relative coordinate within the cube "(-1:1)" range
+    parentmidpointposinterp::MVector{N,FT}#relative coordinate within the local cube "(-1:1)" range
     #gradient ::MVector{Nfc,MVector{N,FT}}
     # curvnorm::Vector{T}
 end
@@ -325,11 +327,9 @@ function MDBM_Problem(fc::fcT, axes, ncubes::Vector{<:NCube}, Nf, Nc, Nfc, IT=In
     N = length(axes)
     T01 = T01maker(Val(N))
     T11pinv = T11pinvmaker(Val(N))
-
-    println("3 contour_level_fc ", contour_level_fc)
     MDBM_Problem{fcT,N,Nf,Nc,Nfc,typeof(T01),typeof(T11pinv),IT,FT,typeof((axes...,))}(fc, Axes(axes...),
-        sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
-            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, T01, T11pinv)
+        sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),MVector{N,IT}([x...] .+ ones(IT, length(x))),
+            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef), MVector{N,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, T01, T11pinv)
 end
 
 function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
@@ -352,14 +352,14 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
     else
         RTc = type_con[1]#Return Type of the constraint function
     end
-    println("Checking memoization ...")
-    
+    #println("Checking memoization ...")
+
     if typeof(f) <: MemF
         println("The function is already memoized: direct useage")
         fun = f
-        memoization=true
+        memoization = true
     else
-        println("Creating function with memoization = ", memoization)
+        #println("Creating function with memoization = ", memoization)
         if memoization
             fun = MemF(f, constraint, SortedCache{AT,Tuple{RTf,RTc}}(), RTf, RTc, AT)#Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
         else
@@ -393,15 +393,15 @@ This is useful for changing contour levels or axes without re-evaluating the fun
 - `contour_level_fc`: (Optional) New contour levels.
 - `axes_new`: (Optional) New axes definition. Must match the dimension of the original problem.
 """
-function recreate(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; contour_level_fc=[nothing, nothing],axes_new=mdbm.axes) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
-   if N !== length(axes_new) 
-    error("The number of axes must be equal to the dimension N of the MDBM problem.\n  N = $(N), length(axes) = $(length(axes_new))")
-   end
-   axes=Axes(axes_new...)
-   mdbm.fc.memoryacc[]=0 #reset the memory acc
+function recreate(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}; contour_level_fc=[nothing, nothing], axes_new=mdbm.axes) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+    if N !== length(axes_new)
+        error("The number of axes must be equal to the dimension N of the MDBM problem.\n  N = $(N), length(axes) = $(length(axes_new))")
+    end
+    axes = Axes(axes_new...)
+    mdbm.fc.memoryacc[] = 0 #reset the memory acc
     MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}(mdbm.fc, Axes(axes...),
-        sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),
-            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, mdbm.T01, mdbm.T11pinv)
+        sort!([NCube{IT,FT,N,Nfc}(MVector{N,IT}([x...]), MVector{N,IT}(ones(IT, length(x))),MVector{N,IT}([x...] .+ ones(IT, length(x))),
+            PositionTree(zeros(FT, length(x))), true, MMatrix{N,Nfc,FT}(undef), MVector{N,FT}(undef)) for x in Iterators.product((x -> 1:(length(x.ticks)-1)).(axes)...,)][:]), contour_level_fc, mdbm.T01, mdbm.T11pinv)
 end
 
 function Base.show(io::IO, mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}

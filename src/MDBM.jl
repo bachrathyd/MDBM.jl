@@ -46,7 +46,6 @@ using StaticArrays
 using LinearAlgebra
 using FunctionWrappers
 
-
 using PrecompileTools: @setup_workload, @compile_workload
 
 export MDBM_Problem, Axis,

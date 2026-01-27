@@ -1,7 +1,7 @@
 name = "MDBM"
 uuid = "dd61e66b-39ce-57b0-8813-509f78be4b4d"
+version = "0.2.2"
 authors = ["Daniel Bachrathy"]
-version = "0.2.1"
 
 [deps]
 FunctionWrappers = "069b7b12-0de2-55c6-9aab-29f3d0a68a2e"

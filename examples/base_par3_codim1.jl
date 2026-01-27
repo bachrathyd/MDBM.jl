@@ -18,7 +18,9 @@ end
 
 
 mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0], constraint=c)
-solve!(mymdbm, 4, doThreadprecomp=false, verbosity=1);
+@time solve!(mymdbm, 4, doThreadprecomp=false, verbosity=1);
+#1.3 sec - first run
+#0.6-0.7 sec - second run
  
  f = Figure(size=(1000, 600))
  ax1 = GLMakie.Axis3(f[1, 1])
