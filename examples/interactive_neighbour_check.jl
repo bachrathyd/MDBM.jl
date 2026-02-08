@@ -60,7 +60,7 @@ for _ in 1:2
     errv_s = [MDBM.getscaled_local_point(MDBM.ncube_error_vector(nc), nc, mymdbm.axes) for nc in mymdbm.ncubes]
     err_norm = norm.(errv_s)
     # nc_list = nc_list[err_norm.>=sort(err_norm)[length(err_norm)÷10*7+1]]
-    nc_list = nc_list[err_norm.>=(minimum(err_norm)+maximum(err_norm))/2]
+    nc_list = nc_list[err_norm.>=(minimum(err_norm)+maximum(err_norm))/2000]
 
     #    nc_list= nc_list[err_norm .> 0.0001]
 

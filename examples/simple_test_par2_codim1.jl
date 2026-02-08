@@ -7,7 +7,7 @@ GLMakie.activate!(;title = "2 parameters, codimension 1")
 
 function foo_par2_codim1(x, y)
     norm([x,y],10.39999)-1.0#((x^2.0 + y) - 1.0^2.0)*x #TODO: test with this function, too
-    #y-sin(x*5.0)/(x*5.0)
+    y-sin(x*5.0)/(x*5.0)
     #y-sin(1/x)
     #((x^2.0 + y) - 1.0^2.0)*x #TODO: test with this function, too
 end

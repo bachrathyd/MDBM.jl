@@ -1,0 +1,242 @@
+using DifferentialEquations
+using LinearAlgebra
+using GLMakie
+using Statistics: mean
+using MDBM
+using StaticArrays
+
+# ==========================================
+# 0. PERFORMANCE SWITCHES
+# ==========================================
+const dolookuptable_triginometry = false  # Set to true to use precomputed trig
+const N_lookup = 1000                     # Resolution of lookup table
+
+# Precompute table if requested
+if dolookuptable_triginometry
+    const phi_grid = SVector{N_lookup, Float64}(range(0.0, 2π, length=N_lookup))
+    const sin_table = sin.(phi_grid)
+    const cos_table = cos.(phi_grid)
+    const dphi_lookup = 2π / (N_lookup - 1)
+end
+
+# ==========================================
+# 1. PARAMETERS & MODEL CONFIGURATION
+# ==========================================
+
+const Z = 4                  
+const fz = 0.0001            
+const Ns = 20                
+
+const fx_hz = 510.0          
+const fy_hz = 802.0          
+const kx = 96.2e6            
+const ky = 47.5e6            
+const zetax = 0.04           
+const zetay = 0.05           
+
+# Use Static Matrices for modal parameters
+const M_mat_S = SMatrix{2,2,Float64}(kx/(2π*fx_hz)^2, 0.0, 0.0, ky/(2π*fy_hz)^2)
+const K_mat_S = SMatrix{2,2,Float64}(kx, 0.0, 0.0, ky)
+const C_mat_S = SMatrix{2,2,Float64}(2*zetax*sqrt(kx * M_mat_S[1, 1]), 0.0, 0.0, 2*zetay*sqrt(ky * M_mat_S[2, 2]))
+const M_inv_S = inv(M_mat_S)
+
+const Kt, Kn = 9.0e8, 2.7e8
+const Kte, Kne = 0.0, 0.0     
+
+const phi_start = π / 2.0
+const phi_exit = π
+
+# ==========================================
+# 2. OPTIMIZED PHYSICS FUNCTIONS (STATIC)
+# ==========================================
+
+# Out-of-place form is faster with StaticArrays
+@fastmath function milling_dynamics(u, h, p, t)
+    Ω, τ, ap, dz = p
+    
+    x, y   = u[1], u[2]
+    vx, vy = u[3], u[4]
+    
+    # h(p, t-τ) returns an SVector
+    u_delayed = h(p, t - τ)
+    xd, yd    = u_delayed[1], u_delayed[2]
+
+    Fx, Fy = 0.0, 0.0
+
+    @inbounds for tooth in 1:Z
+        ϕ = Ω * t + (tooth - 1) * (2π / Z)
+        ϕ_mod = mod(ϕ, 2π)
+
+        if phi_start <= ϕ_mod <= phi_exit
+            local s_phi, c_phi
+            
+            if dolookuptable_triginometry
+                idx = clamp(round(Int, ϕ_mod / dphi_lookup) + 1, 1, N_lookup)
+                s_phi = sin_table[idx]
+                c_phi = cos_table[idx]
+            else
+                s_phi, c_phi = sincos(ϕ_mod) # sincos is faster than calling sin and cos separately
+            end
+
+            h_chip = fz * s_phi + (x - xd) * s_phi + (y - yd) * c_phi
+
+            if h_chip > 0.0
+                dFt = Kt * h_chip * dz
+                dFr = Kn * h_chip * dz
+                Fx += Ns * (-dFt * c_phi - dFr * s_phi)
+                Fy += Ns * (dFt * s_phi - dFr * c_phi)
+            end
+        end
+    end
+
+    # Forces vector
+    F = SVector{2,Float64}(Fx, Fy)
+    V = SVector{2,Float64}(vx, vy)
+    Q = SVector{2,Float64}(x, y)
+
+    # Compute acceleration: M_inv * (F - C*V - K*Q)
+    dv = M_inv_S * (F - C_mat_S * V - K_mat_S * Q)
+
+    # Return as a single SVector for the DDE solver
+    return SVector{4,Float64}(vx, vy, dv[1], dv[2])
+end
+
+# ==========================================
+# 3. POINCARÉ ANALYSIS FUNCTION
+# ==========================================
+
+function get_poincare_diff_norm(rpm::Float64, ap_val::Float64; prob_b=base_prob)::Float64
+    new_Ω = rpm * 2π / 60.0
+    new_τ = 2π / (Z * new_Ω)
+    new_dz = ap_val / Ns
+    new_p = (new_Ω, new_τ, ap_val, new_dz)
+
+    total_revs = 250
+    t_end = total_revs * (2π / new_Ω)
+    t_cutoff = t_end - 5.0 * (2π / new_Ω)
+    p_times = range(t_cutoff, t_end, step=new_τ)
+
+    # Convergence check threshold
+    condition(u, t, integrator) = norm(u) > 1e5
+    cb_diverge = DiscreteCallback(condition, terminate!)
+
+    prob = remake(prob_b, p=new_p, tspan=(0.0, t_end), constant_lags=[new_τ])
+
+    # Tsit5 is excellent for StaticArrays
+    sol = solve(prob, MethodOfSteps(Tsit5()),
+        reltol=1e-3,# abstol=1e-3, # Slightly relaxed for speed
+        saveat=p_times, callback=cb_diverge,
+        maxiters=3e5, verbose=false)
+
+    if isempty(sol.t) || sol.t[end] < (p_times[end] - 1e-9)
+        return 10.0 
+    end
+
+    # Use diff and norm on SVectors
+    diffs = [norm(sol.u[k] - sol.u[k-1]) for k in 2:length(sol.u)]
+    return log10(max(mean(diffs), 1e-12))
+end
+
+# ==========================================
+# 4. EXECUTION
+# ==========================================
+
+# Initial condition as SVector
+u0 = SVector{4,Float64}(0.0, 0.0, 0.0, 0.0)
+h_init(p, t) = SVector{4,Float64}(0.0, 0.0, 0.0, 0.0)
+p_init = (10000.0 * 2π / 60, 2π / (Z * 10000.0 * 2π / 60), 0.005, 0.005 / Ns)
+prob_base = DDEProblem(milling_dynamics, u0, h_init, (0.0, 1.0), p_init, constant_lags=[p_init[2]])
+
+n_rpm, n_ap = 160, 140
+rpms = collect(range(2000.0, 41000.0, length=n_rpm))
+aps = collect(range(0.005, 0.12, length=n_ap))
+
+println("Starting stability map generation (Manual Loop)...")
+stability_grid = zeros(n_ap, n_rpm)
+
+@time for j in 1:n_rpm
+    current_rpm = rpms[j]
+    if j % 20 == 0 || j == 1
+        println("Simulating: $(round(current_rpm)) RPM ($j/$n_rpm)")
+    end
+    for i in 1:n_ap
+        stability_grid[i, j] = get_poincare_diff_norm(current_rpm, aps[i], prob_b=prob_base)
+    end
+end
+
+# ==========================================
+# 5. VISUALIZATION (GLMakie)
+# ==========================================
+
+fig = Figure(size = (1200, 800))
+ax_hm = GLMakie.Axis(fig[1, 1], title="Stability Chart (StaticArrays optimized)", 
+             xlabel="Spindle Speed [RPM]", ylabel="Axial Depth [mm]")
+
+hm = heatmap!(ax_hm, rpms, aps .* 1000, stability_grid', colormap=:turbo)
+Colorbar(fig[1, 2], hm, label="log10(Poincaré Diff)")
+contour!(ax_hm, rpms, aps .* 1000, stability_grid', levels=[0.0], color=:white, linewidth=2)
+
+# ==========================================
+# 6. MDBM REFINEMENT
+# ==========================================
+
+foo_milling(rpm::Float64, ap::Float64)::Float64 = get_poincare_diff_norm(rpm, ap, prob_b=prob_base)
+rpm_coarse = collect(range(2000.0, 41000.0, length=13))
+ap_coarse = collect(range(0.005, 0.12, length=10))
+
+println("Refining boundary with MDBM...")
+mymdbm = MDBM_Problem(foo_milling, [rpm_coarse, ap_coarse])
+MDBM.solve!(mymdbm, 5)
+#MDBM.solve!(mymdbm, 15, refinementratio=0.5)
+
+xy_sol = getinterpolatedsolution(mymdbm)
+#scatter!(ax_hm, xy_sol[1], xy_sol[2] * 1000, color=:cyan, markersize=4, label="MDBM")
+scatter!(ax_hm, xy_sol[1], xy_sol[2] * 1000,color=:red,markersize=8)
+
+display(fig)
+
+# ==========================================
+# 7. ENSEMBLE BRUTE FORCE
+# ==========================================
+
+grid_params = [(r, a) for a in aps for r in rpms]
+total_points = length(grid_params)
+
+function prob_func(prob, i, repeat)
+    rpm_val, ap_val = grid_params[i]
+    new_Ω = rpm_val * 2π / 60.0
+    new_τ = 2π / (Z * new_Ω)
+    new_dz = ap_val / Ns
+    new_p = (new_Ω, new_τ, ap_val, new_dz)
+    t_end = 250.0 * (2π / new_Ω)
+    remake(prob, p=new_p, tspan=(0.0, t_end), constant_lags=[new_τ])
+end
+
+function output_func(sol, i)
+    rpm_val, ap_val = grid_params[i]
+    new_Ω = rpm_val * 2π / 60.0
+    t_end = 250.0 * (2π / new_Ω)
+    if isempty(sol.t) || sol.t[end] < (t_end - 1e-9)
+        return (10.0, false)
+    end
+    diffs = [norm(sol.u[k] - sol.u[k-1]) for k in 2:length(sol.u)]
+    return (log10(max(mean(diffs), 1e-12)), false)
+end
+
+println("\nStarting Ensemble brute force calculation...")
+ensemble_prob = EnsembleProblem(prob_base, prob_func = prob_func, output_func = output_func, safetycopy = true)
+
+@time ensemble_sol = solve(ensemble_prob, MethodOfSteps(Tsit5()), EnsembleThreads(), 
+                           trajectories = total_points, reltol=1e-3,# abstol=1e-3,
+                           callback=DiscreteCallback((u,t,integrator)->norm(u)>1e5, terminate!), 
+                           maxiters=3e5, verbose=false)
+
+stability_grid_ens = reshape([ensemble_sol.u[i] for i in 1:total_points], (n_rpm, n_ap))'
+
+fig_ens = Figure()
+ax_ens = GLMakie.Axis(fig_ens[1,1], title="Ensemble Brute Force Result", xlabel="RPM", ylabel="ap [mm]")
+heatmap!(ax_ens, rpms, aps .* 1000, stability_grid_ens', colormap=:turbo)
+contour!(ax_ens, rpms, aps .* 1000, stability_grid_ens', levels=[0.0], color=:white, linewidth=2)
+scatter!(ax_ens, xy_sol[1], xy_sol[2] * 1000, color=:cyan, markersize=4, label="MDBM")
+
+display(fig_ens)

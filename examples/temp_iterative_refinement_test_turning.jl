@@ -50,7 +50,7 @@ turning_mdbm_prob = MDBM_Problem(char_eq, [Ω_axis, w_axis, ωc_axis])
 
 @time solve!(turning_mdbm_prob, 4, verbosity=0, checkneighbourNum=2)# check neighbour at every iteration
 ##
-@time for _ in 1:6
+@time for _ in 1:1
 nc_list = 1:size(turning_mdbm_prob.ncubes, 1)
 
 
@@ -75,7 +75,8 @@ MDBM.interpolate!(turning_mdbm_prob, interpolationorder=1)
 
 #@time solve!(turning_mdbm_prob, 1,interpolationorder=1)
 
-#checkneighbour!(turning_mdbm_prob,maxiteration=100)
+#@time checkneighbour!(turning_mdbm_prob,maxiteration=0,verbosity=3);
+# checkneighbour!(turning_mdbm_prob,maxiteration=100)
 #@show turning_mdbm_prob
 
 # --- create once ---
@@ -189,7 +190,8 @@ end
 fig
 end
 ##
-@time checkneighbour!(turning_mdbm_prob,maxiteration=15,verbosity=0);
+#@time checkneighbour!(turning_mdbm_prob,maxiteration=15,verbosity=3);
+@time checkneighbour!(turning_mdbm_prob,verbosity=3);
 nothing
 #3.7  - with extra variable - first run
 #4.5 - 5.3 sec - with extra variable - further runs
