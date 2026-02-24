@@ -51,7 +51,7 @@ using PrecompileTools: @setup_workload, @compile_workload
 export MDBM_Problem, Axis,
     solve!, interpolate!, refine!, checkneighbour!,
     axesextend!, getinterpolatedsolution, getevaluatedpoints, getevaluatedfunctionvalues, getevaluatedconstraintvalues,
-    connect, triangulation, getinterpolatedgradient,
+    connect,connectoverlap, triangulation, getinterpolatedgradient,
     interpsubcubesolution!, extract_paths,
     recreate
 include("MDBM_types.jl")

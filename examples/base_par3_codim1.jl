@@ -21,60 +21,60 @@ mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0], constrain
 @time solve!(mymdbm, 4, doThreadprecomp=false, verbosity=1);
 #1.3 sec - first run
 #0.6-0.7 sec - second run
- 
- f = Figure(size=(1000, 600))
- ax1 = GLMakie.Axis3(f[1, 1])
- 
- xyz_sol = getinterpolatedsolution(mymdbm)
- scatter!(ax1, xyz_sol..., markersize=15, color=:red, marker='x', strokewidth=3, label="solution")
- 
- # show the points where the function is evaluated
- ## xyz_val = getevaluatedpoints(mymdbm)
- ## fval = getevaluatedfunctionvalues(mymdbm)
- ## scatter!(xyz_val..., color=sign.(fval), label="evaluated")
- ## 
- ## # connecting and plotting the "mindpoints" of the n-cubes
- ## DT1 = connect(mymdbm)
- ## edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)], fill(NaN, length(DT1))])'[:] for i_sol in xyz_sol]
- ## lines!(edge2plot_xyz..., linewidth=5, label="midpoints solution connected")
- ## 
- ## # #plotting the gradintes
- ## gxyz = getinterpolatedgradient(mymdbm.ncubes, mymdbm)
- ## arrows!(xyz_sol..., gxyz[1]..., arrowsize=0.1, lengthscale=0.1, label="gradient")#    arrowcolor = strength, linecolor = strength)
- ## 
- 
- 
- 
- 
- #--------------------------- Sub-cube interpolation----------------
- ax2 = GLMakie.Axis3(f[1, 2])
- #calcuatin the sub-cubes interpolations stored in the mymdbm.ncubes[i].posinterp
- interpsubcubesolution!(mymdbm)
- #extracting the resutls to from the 
- path2points = extract_paths(mymdbm);
- 
- #extracting the unique points and plotting
- puniq = unique(collect(Iterators.flatten(Iterators.flatten(path2points))));
- scatter!(ax2, getindex.(puniq, 1), getindex.(puniq, 2), getindex.(puniq, 3), markersize=5, color=:green, label="subface - solution")
- 
- 
- 
- #exctracing the simplexes for each ncube
- flatened_path2points = collect(Iterators.flatten(path2points))
- #eliminating the points with less than 2 points (caused by fininte precision)
- true_truflatened_path2points = flatened_path2points[length.(flatened_path2points).==3]
- 
- 
- #plotting the lines between the points
- n_faces = reshape(1:(3*length(true_truflatened_path2points)), (3, length(true_truflatened_path2points)))'
- vertices_mat = hcat(Iterators.flatten(true_truflatened_path2points)...)
- mesh!(vertices_mat, n_faces, alpha=0.5, label="subface - local simplex")
 
- 
+f = Figure(size=(1000, 600))
+ax1 = GLMakie.Axis3(f[1, 1])
+
+xyz_sol = getinterpolatedsolution(mymdbm)
+scatter!(ax1, xyz_sol..., markersize=15, color=:red, marker='x', strokewidth=3, label="solution")
+
+# show the points where the function is evaluated
+## xyz_val = getevaluatedpoints(mymdbm)
+## fval = getevaluatedfunctionvalues(mymdbm)
+## scatter!(xyz_val..., color=sign.(fval), label="evaluated")
+## 
+## # connecting and plotting the "mindpoints" of the n-cubes
+## DT1 = connect(mymdbm)
+## edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)], fill(NaN, length(DT1))])'[:] for i_sol in xyz_sol]
+## lines!(edge2plot_xyz..., linewidth=5, label="midpoints solution connected")
+## 
+## # #plotting the gradintes
+## gxyz = getinterpolatedgradient(mymdbm.ncubes, mymdbm)
+## arrows!(xyz_sol..., gxyz[1]..., arrowsize=0.1, lengthscale=0.1, label="gradient")#    arrowcolor = strength, linecolor = strength)
+## 
+
+
+
+
+#--------------------------- Sub-cube interpolation----------------
+ax2 = GLMakie.Axis3(f[1, 2])
+#calcuatin the sub-cubes interpolations stored in the mymdbm.ncubes[i].posinterp
+interpsubcubesolution!(mymdbm)
+#extracting the resutls to from the 
+path2points = extract_paths(mymdbm);
+
+#extracting the unique points and plotting
+puniq = unique(collect(Iterators.flatten(Iterators.flatten(path2points))));
+#scatter!(ax2, getindex.(puniq, 1), getindex.(puniq, 2), getindex.(puniq, 3), markersize=5, color=:green, label="subface - solution")
+
+
+
+#exctracing the simplexes for each ncube
+flatened_path2points = collect(Iterators.flatten(path2points))
+#eliminating the points with less than 2 points (caused by fininte precision)
+true_truflatened_path2points = flatened_path2points[length.(flatened_path2points).==3]
+
+
+#plotting the lines between the points
+n_faces = reshape(1:(3*length(true_truflatened_path2points)), (3, length(true_truflatened_path2points)))'
+vertices_mat = hcat(Iterators.flatten(true_truflatened_path2points)...)
+mesh!(vertices_mat, n_faces, alpha=0.5, label="subface - local simplex")
+
+
 ##  
-##  display(GLMakie.Screen(), f)
-##  axislegend(ax1)
-##  axislegend(ax2)
+display(GLMakie.Screen(), f)
+axislegend(ax1)
+axislegend(ax2)
 ##  
 ##  
 ##  

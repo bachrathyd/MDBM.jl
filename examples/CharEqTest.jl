@@ -3,8 +3,9 @@
 
 # import Pkg; Pkg.add("GLMakie")
 # import Pkg; Pkg.add("LaTeXStrings")
-
+5+5
 using MDBM                        # Multi‐Dimensional Bisection Method 
+
 using GLMakie                     # High‐performance plotting             
 using LinearAlgebra               # for complex operations (norm, etc.)
 using LaTeXStrings
@@ -93,7 +94,7 @@ end
 # Choose parameter ranges
 Kpphi_min, Kpphi_max = -1100.0, 100.0
 Kdphi_min, Kdphi_max = -80.0, 0.0
-ω_min, ω_max = 0.0001, 150.0       
+ω_min, ω_max = -10.1, 150.0       
 
 # Build coarse MDBM axes in (Kpphi, Kdphi, ω):
 axis_Kpphi=LinRange(Kpphi_min, Kpphi_max, 11)
@@ -130,7 +131,7 @@ ax.yticklabelsize = 12
 
 display(figure1)
 
-save("stabplot.png", figure1)
+# save("stabplot.png", figure1)
 
 ## 4D -------------------------------------------------------
 # Define a small wrapper for MDBM that only uses (Kpphi,Kdphi,ω):
@@ -139,20 +140,16 @@ function char_fun4d(Kpphi, Kdphi, ω ,tau2_in)
     return char_fun_scooter_hierarchical_steering_multipledelays(Kpphi, Kdphi, ω, tau2=tau2_in, par=parlist)
 end
 char_fun4d(-500.0,-20.0, 15.0, 0.1)
-tau2_min, tau2_max = 0.05, 0.2
+tau2_min, tau2_max = 0.01, 0.02
 
 axis_Kpphi=LinRange(Kpphi_min, Kpphi_max, 6)
 axis_Kdphi = LinRange(Kdphi_min, Kdphi_max, 6)
 axis_ω = LinRange(ω_min, ω_max, 6)
-
 axis_tau2 = LinRange(tau2_min, tau2_max, 6)
 
+
 mdbm4d = MDBM_Problem(char_fun4d, [axis_Kpphi, axis_Kdphi, axis_ω,axis_tau2])
-
-@time interpolate!(mdbm4d)
-@profview refine!(mdbm4d)
-
-solve!(mdbm4d, 2,verbosity=1,checkneighbourNum=0)
+solve!(mdbm4d, 4,verbosity=1,checkneighbourNum=0)
 figure2 = Figure(size=(1000, 700))
 ax = Axis3(figure2[1, 1],
     xlabel="Kpphi",
@@ -165,4 +162,6 @@ ax = Axis3(figure2[1, 1],
 #ax1 = Axis(figure1[1, 1], xlabel="V (dimensionless)", ylabel="L (dimensionless)", title="Figure 4(a) from Takács et al. (2009), Σ=1.8, ζ=0")
 
 xyzr_sol = getinterpolatedsolution(mdbm4d)
-scatter!(ax, xyzr_sol[[1, 2, 3]]..., markersize=6, color=xyzr_sol[4])
+scatter!(ax, xyzr_sol[[1, 2, 4]]..., markersize=6, color=xyzr_sol[3])
+
+display(figure2)

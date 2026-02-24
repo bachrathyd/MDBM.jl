@@ -8,7 +8,7 @@ A small wrapper that keeps:
 Insertion only does a binary‐search+`insert!` on the *key* array (cheap `K` copies,
 not shifting huge containers), and storing the heavy `V` in a hash‐table.
 """
-struct SortedCache{K,V}
+mutable struct SortedCache{K,V}
     data::Dict{K,V}
     keys::Vector{K}
 end
@@ -32,46 +32,60 @@ end
 Insert many (key ⇒ val) pairs at once.  New keys are sorted,
 duplicates overwrite, and the merge cost is O(n₁+n₂), not O(n₂·n₁).
 """
-function append_SortedCache!(sc::SortedCache{K,V}, kvs::Vector{Pair{K,V}}) where {K,V}
-    # 1) sort your incoming batch by key
-    sort!(kvs, by=p -> p.first)
+function append_SortedCache!(sc::SortedCache{K,V}, new_keys::Vector{K}, new_vals::Vector{V}) where {K,V}
+    if isempty(new_keys)
+        return nothing
+    end
 
-    # 2) extract sorted keys & vals
-    newkeys = [p.first for p in kvs]
-    newvals = [p.second for p in kvs]
+    # Pre-size the Dict
+    sizehint!(sc.data, length(sc.data) + length(new_keys))
 
-    # 3) merge old sc.keys and newkeys into one vector
+    n_old = length(sc.keys)
+    n_new = length(new_keys)
+    
+    # We can skip sort!(new_keys) because they came from a sorted source!
+    # This is a big saving.
+    
+    merged = Vector{K}(undef, n_old + n_new)
+    
+    i, j, k = 1, 1, 1
     oldkeys = sc.keys
-    merged = Vector{K}(undef, length(oldkeys) + length(newkeys))
-    i = j = k = 1
-    while i ≤ length(oldkeys) && j ≤ length(newkeys)
-        if oldkeys[i] === newkeys[j] || oldkeys[i] < newkeys[j]
-            merged[k] = oldkeys[i]
+    
+    while i ≤ n_old && j ≤ n_new
+        old_k = oldkeys[i]
+        new_k = new_keys[j]
+
+        if old_k < new_k
+            merged[k] = old_k
             i += 1
+        elseif old_k == new_k
+            # Duplicate found (shouldn't happen if filtered correctly, but good for safety)
+            sc.data[old_k] = new_vals[j]
+            merged[k] = old_k
+            i += 1
+            j += 1
         else
-            merged[k] = newkeys[j]
-            sc.data[newkeys[j]] = newvals[j]  # insert into Dict
+            sc.data[new_k] = new_vals[j]
+            merged[k] = new_k
             j += 1
         end
         k += 1
     end
-    # finish leftovers
-    while i ≤ length(oldkeys)
+
+    # Finish leftovers
+    while i ≤ n_old
         merged[k] = oldkeys[i]
-        i += 1
-        k += 1
+        i += 1; k += 1
     end
-    while j ≤ length(newkeys)
-        merged[k] = newkeys[j]
-        sc.data[newkeys[j]] = newvals[j]
-        j += 1
-        k += 1
+    while j ≤ n_new
+        new_k = new_keys[j]
+        sc.data[new_k] = new_vals[j]
+        merged[k] = new_k
+        j += 1; k += 1
     end
 
     resize!(merged, k - 1)
-    # instead of sc.keys = merged, do:
-    empty!(sc.keys)               # drop all old entries
-    Base.append!(sc.keys, merged)      # fill in the merged key‐list
+    sc.keys = merged
     return nothing
 end
 
@@ -166,30 +180,64 @@ function (memfun::MemF{RTf,RTc,AT})(args...) where {RTf,RTc,AT}
     memfun(AT(args))
 end
 
-#TODO Inconsistent return in the “batch” call - it should return a vector of the results of the function should be renamed e.g.: prefill!
+# #TODO Inconsistent return in the “batch” call - it should return a vector of the results of the function should be renamed e.g.: prefill!
+# function (memfun::MemF{RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {RTf,RTc,AT}
+#     #println("Threaded")
+#     Vargs = unique(sort(Vargs))
+#     VargsIndex2compute = .!is_sorted_in_sorted(Vargs, memfun.fvalarg)
+# 
+#     #@show sum(VargsIndex2compute)
+#     TheContainer_sorted = Array{Tuple{RTf,RTc}}(undef, sum(VargsIndex2compute))
+#     #Threads.@threads    for (index,args) in enumerate(Vargs[VargsIndex2compute])
+# 
+# 
+#     Vargs2compute_sorted = Vargs[VargsIndex2compute]#sort() - not necessary done befor
+#     Threads.@threads for index in eachindex(Vargs2compute_sorted)
+#         # @show Vargs2compute[index]
+#         TheContainer_sorted[index] = memfun(RTf, RTc, Vargs2compute_sorted[index])
+#     end
+# 
+#     # sort them in-place by key:
+#     append_SortedCache!(memfun.fvalarg, Pair.(Vargs2compute_sorted, TheContainer_sorted))
+# 
+#     # merge_sorted(memfun.fvalarg, TheContainer) # tooo, slow. Maybe due to the memory allocation and copying
+#     return nothing
+# end
+
 function (memfun::MemF{RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {RTf,RTc,AT}
-    #println("Threaded")
-    Vargs = unique(sort(Vargs))
-    VargsIndex2compute = .!is_sorted_in_sorted(Vargs, memfun.fvalarg)
+    # 1. Clean up input: Sort and Deduplicate
+    sort!(Vargs)
+    unique!(Vargs)
 
-    #@show sum(VargsIndex2compute)
-    TheContainer_sorted = Array{Tuple{RTf,RTc}}(undef, sum(VargsIndex2compute))
-    #Threads.@threads    for (index,args) in enumerate(Vargs[VargsIndex2compute])
-
-
-    Vargs2compute_sorted = sort(Vargs[VargsIndex2compute])
-    Threads.@threads for index in eachindex(Vargs2compute_sorted)
-        # @show Vargs2compute[index]
-        TheContainer_sorted[index] = memfun(RTf, RTc, Vargs2compute_sorted[index])
+    # 2. Filter: Find which points are MISSING from the cache
+    # This returns a BitVector
+    missing_mask = .!is_sorted_in_sorted(Vargs, memfun.fvalarg)
+    
+    # If everything is computed, return early
+    if !any(missing_mask)
+        return nothing 
     end
 
-    # sort them in-place by key:
-    append_SortedCache!(memfun.fvalarg, Pair.(Vargs2compute_sorted, TheContainer_sorted))
+    # 3. Extract the subset of keys to compute
+    # Since Vargs is sorted, this subset is AUTOMATICALLY sorted.
+    keys_to_compute = Vargs[missing_mask] 
+    
+    # 4. Allocate space for results
+    # We use a standard Array since we are going to write to it in parallel
+    vals_computed = Vector{Tuple{RTf,RTc}}(undef, length(keys_to_compute))
 
-    # merge_sorted(memfun.fvalarg, TheContainer) # tooo, slow. Maybe due to the memory allocation and copying
+    # 5. Parallel Compute
+    # No locks needed because we are writing to a disjoint 'vals_computed' array
+    Threads.@threads for i in eachindex(keys_to_compute)
+        vals_computed[i] = memfun(RTf, RTc, keys_to_compute[i])
+    end
+
+    # 6. Bulk Insert (Single Threaded)
+    # We pass the two vectors directly to avoid creating Vector{Pair}
+    append_SortedCache!(memfun.fvalarg, keys_to_compute, vals_computed)
+
     return nothing
 end
-
 
 
 

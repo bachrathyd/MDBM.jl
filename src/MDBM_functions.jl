@@ -271,6 +271,8 @@ function interpsubcubesolution!(posall_tree, faces, fixed_dims, corner, size, md
 
         # As = MVector{Nfc,FT}(undef)
         # ns = MMatrix{length(free_dims),Nfc,FT}(undef)
+        #As = zeros(MVector{Nfc,FT})
+        #ns = zeros(MMatrix{length(free_dims),Nfc,FT})
         # fit_hyperplane!(FunTupleVector, Val(Nfree), Val(Nf),Val(Nc), T11pinv,
         # posinterp[free_dims],grad[free_dims,:],As,ns)
 
@@ -495,7 +497,7 @@ function fit_hyperplane!(FunTupleVector, ::Val{N}, ::Val{Nf}, ::Val{Nc}, T11pinv
     @inbounds if Nc == 0 || all(
         any((c) -> !isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
         for fi in 1:length(FunTupleVector[1][2])
-    )# check the constraint: do wh have to compute at all?!?
+    )# check the constraint: do wh have to compute at all?!? do we touches the positive area at least
 
 
         #for f---------------------
@@ -545,6 +547,7 @@ function fit_hyperplane!(FunTupleVector, ::Val{N}, ::Val{Nf}, ::Val{Nc}, T11pinv
     return posinterp, grad
 end
 
+
 function fit_hyperplane(FunTupleVector, ::Val{N}, ::Val{Nf}, ::Val{Nc}, FT, T11pinv) where {N,Nf,Nc}
     # number of corners = 2^Nfree
 
@@ -552,8 +555,10 @@ function fit_hyperplane(FunTupleVector, ::Val{N}, ::Val{Nf}, ::Val{Nc}, FT, T11p
     grad = zeros(MMatrix{N,Nf + Nc,FT})
 
     #TODO: store them somewhere - to reduce memory allcoations
-    As = MVector{Nf + Nc,FT}(undef)
-    ns = MMatrix{N,Nf + Nc,FT}(undef)
+    #As = MVector{Nf + Nc,FT}(undef)
+    #ns = MMatrix{N,Nf + Nc,FT}(undef)
+    As = zeros(MVector{Nf + Nc,FT})
+    ns = zeros(MMatrix{N,Nf + Nc,FT})
     @inbounds if Nc == 0 || all(
         any((c) -> !isless(c[2][fi], zero(c[2][fi])), FunTupleVector)
         for fi in 1:length(FunTupleVector[1][2])
@@ -623,8 +628,20 @@ function ncube_error_vector!(
     out::AbstractVector{FT},
     nc::NCube{IT,FT,N,Nfc};
     reference_point=nc.parentmidpointposinterp,
-    usecols=1:size(nc.gradient, 2),
+    usecols=collect(1:size(nc.gradient, 2)),
 ) where {IT,FT,N,Nfc}
+    #Filtering out the "zeros" gradients
+    keepat!(usecols, [norm(nc.gradient[:, j]) > (1000 * eps(FT)) for j in usecols])
+    ncols = length(usecols)
+    if ncols == 0 # nothing to project onto
+        @inbounds begin
+            # delta := parent ξ  −  child ξ
+            for d in 1:N
+                out[d] = zero(FT)
+            end
+        end
+        return out
+    end
 
     @inbounds begin
         # delta := parent ξ  −  child ξ
@@ -632,10 +649,6 @@ function ncube_error_vector!(
             out[d] = reference_point[d] - nc.posinterp.p[d]
         end
     end
-
-    # nothing to project onto
-    ncols = length(usecols)
-    ncols == 0 && return out
 
     # View the chosen gradient block (N × ncols)
     G = @view nc.gradient[:, usecols]
@@ -666,7 +679,7 @@ function ncube_error_vector!(
 end
 
 # convenience wrapper returning an MVector (if you prefer a non-bang version)
-function ncube_error_vector(nc::NCube{IT,FT,N,Nfc}; reference_point=nc.parentmidpointposinterp, usecols=1:size(nc.gradient, 2)) where {IT,FT,N,Nfc}
+function ncube_error_vector(nc::NCube{IT,FT,N,Nfc}; reference_point=nc.parentmidpointposinterp, usecols=collect(1:size(nc.gradient, 2))) where {IT,FT,N,Nfc}
     out = MVector{N,eltype(nc.parentmidpointposinterp)}(undef)
     ncube_error_vector!(out, nc; reference_point=reference_point, usecols=usecols)
     return out
@@ -690,8 +703,13 @@ function _interpolate!(ncubes::Vector{NCube{IT,FT,N,Nfc}}, mdbm::MDBM_Problem{fc
     #Threads.@threads 
     for i_nc in 1:length(ncubes)
         nc = ncubes[i_nc]
-        As = MVector{Nfc,FT}(undef)
-        ns = MMatrix{N,Nf + Nc,FT}(undef)
+        # As = MVector{Nfc,FT}(undef)
+        # ns = MMatrix{N,Nfc,FT}(undef)
+        As = zeros(MVector{Nfc,FT})
+        ns = zeros(MMatrix{N,Nfc,FT})
+
+
+
         FunTupleVector = getcornerval(nc, mdbm)
         fit_hyperplane!(FunTupleVector, Val(N), Val(Nf), Val(Nc), mdbm.T11pinv,
             nc.posinterp.p, nc.gradient, As, ns)
@@ -746,7 +764,7 @@ function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
 
     nc_list = 1:size(mdbm.ncubes, 1)
 
-    if refinementratio < 1.0
+    if refinementratio < 1.0 || abstol > 0.0
         #TODO: error definition, which one it the better?!?! based on parent midpoint or based on neighbouring n-cube
         # cons: parnet base: sharp coreners fromed by "stratigt" lines, leads to problesm (the error seems to be small)
         if true
@@ -754,7 +772,7 @@ function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
             errv_s = [getscaled_local_point(ncube_error_vector(nc), nc, mdbm.axes) for nc in mdbm.ncubes]
             err_norm = errorvetor_normalization.(errv_s)
         else
-            #Error: based on differnce with neighbouring n-cube
+            # Error: based on differnce with neighbouring n-cube
             # The neighbouring n-cubes (based on the overlapping test with inflation=1)
             err_norm = zeros(FT, length(mdbm.ncubes))
             for (i_nc, nc) in enumerate(mdbm.ncubes)
@@ -766,27 +784,28 @@ function refine!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
             end
         end
 
+          if verbosity > 0
+            println("Error norm- min: $(minimum(err_norm)) max: $(maximum(err_norm))")
+          end
         #TODO: which is the better?!?!?! Selection based on a listing or based on relative errore value
         # Don't sure. Let the user select
-        if false
+        if true
             #error above the weighted average of the min and max error
             nc_list = nc_list[(err_norm.>=(minimum(err_norm)*(refinementratio)+maximum(err_norm)*(1.0-refinementratio))).&(err_norm.>=abstol)]#0.61803398875
         else
             #error above the percentile of the error values
             separeating_error_value = sort(err_norm, rev=true)[IT(ceil(length(err_norm) * refinementratio))]
-            nc_list = nc_list[(err_norm.>=separeating_error_value).&(err_norm.>=abstol)]#0.61803398875
+            nc_list = nc_list[(err_norm.>=separeating_error_value).&(err_norm.>=abstol)]
         end
         # if length(nc_list) == 0
         #     println("No n-cube selected for refinement!")
         #     #return nothing
         # end
     end
+
     doubling!(mdbm, directions, nc_list=nc_list)
     refinencubes!(mdbm.ncubes, nc_list, directions)
     if local_max_diff_level > 0
-        if verbosity > 0
-            println("Unifying n-cubes with local max diff level = $local_max_diff_level and global max diff level = $global_max_diff_level")
-        end
         cube_unify!(mdbm.ncubes, mdbm.ncubes, local_max_diff_level=local_max_diff_level, global_max_diff_level=global_max_diff_level, itrative=itrative, verbosity=verbosity)
     end
     #println("orig")
@@ -824,6 +843,9 @@ end
 function cube_unify!(ncubes_A::Vector{NCube{IT,FT,N,Nfc}}, ncube_pool::Vector{NCube{IT,FT,N,Nfc}};
     local_max_diff_level::IT=0, global_max_diff_level::IT=8, itrative::Bool=true, verbosity::IT=0) where {IT,FT,N,Nfc}
     do_more_iteration = true
+    if verbosity > 1
+            println("Unifying n-cubes with local max diff level = $local_max_diff_level and global max diff level = $global_max_diff_level")
+    end
     while do_more_iteration
         do_more_iteration = false
         for d in 1:N
@@ -1319,6 +1341,22 @@ function checkneighbour!(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT};
     end
 end
 
+
+function connectoverlap(mdbm::MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}) where {fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
+    #---------- line connection (no corener neighbour is needed) --------------
+    DT1 = Array{Tuple{Int64,Int64}}(undef, 0)
+    for inc in 1:length(mdbm.ncubes)
+        #ncneigh = generateneighbours([mdbm.ncubes[inc]], mdbm)
+         ov = MDBM.overlapping_vector(mdbm.ncubes[inc], mdbm.ncubes, inflate=1)
+         ncneigh = mdbm.ncubes[ov]
+        indinresults = index_sorted_in_sorted(ncneigh, mdbm.ncubes)#delete the ones which is already presented
+        Base.append!(DT1, [(inc, x) for x in indinresults if x != 0])
+    end
+    filter!(d -> (d[2] > d[1]), DT1)#TODO: eleve csak ez egyik irányban levő szomszédokat kellene keresni!!!
+    sort!(DT1; alg=QuickSort)
+    unique!(DT1)
+    return DT1
+end
 
 
 """
