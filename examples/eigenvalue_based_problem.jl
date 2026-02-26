@@ -1,6 +1,6 @@
 using MDBM
 using LinearAlgebra, Arpack
-function fooeig(x)
+function fooeig(x)::Float64
        mymx=Matrix{Float64}(I,5,5);
        mymx[2,1]=x;
        mymx[1,2]=x+5;

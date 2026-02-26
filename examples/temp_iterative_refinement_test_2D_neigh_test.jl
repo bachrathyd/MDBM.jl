@@ -11,7 +11,7 @@ GLMakie.activate!(; title="2 parameters, codimension 1")
 function foo_par2_codim1(x, y)
     pow = 120.0
     pow = 20.0
-    pow = 0.2
+    pow = 13.2
     abs(x)^pow + abs(y)^pow - 2.0^pow + 0.0 * x * y
 
     #abs(x)^0.4 + abs((y))^1.4 - 1.0

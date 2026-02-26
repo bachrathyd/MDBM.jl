@@ -17,7 +17,8 @@ end;
 using MDBM
 
 method=SemiDiscretization(2,T/40);
-taumax=...
+taumax=1 #TODO: replace with the correct walue
+@warn "The value of τmax is set to 1, which may not be correct. Please replace it with the correct value."
 foo(n::Float64,a::Float64)::Float64 = log(spectralRadiusOfMapping(DiscreteMapping_LR(createMillingProblem(δ,ε,b0,a1,T=T),method,τmax,
     n_steps=Int((T+100eps(T))÷method.Δt)))); # No additive term calculated
 using MDBM

@@ -36,7 +36,7 @@ mymdbm = MDBM_Problem(foo_par2_codim1, [-3.01:3.0, -3.02:3.0])
 # @time solve!(mymdbm, 1,interpolationorder=1)#number of refinements - increase it slightly to see smoother results 
 
 ##
-for _ in 1:3  
+for _ in 1:10  
      nc_list = 1:size(mymdbm.ncubes, 1)
 
 
