@@ -46,9 +46,10 @@ foo_null(p...) = nothing
 
 DelayMathieu_δb0_mdbm=MDBM_Problem(foo_null, axis,constraint=foo_δb0)# stable area
 #DelayMathieu_δb0_mdbm=MDBM_Problem(foo_δb0, axis)# stability border only - almost the same speed
-chat_abstol=1e-3
+chat_abstol=1e-2
 println("Start MDBM solver")
-@time solve!(DelayMathieu_δb0_mdbm, 10,abstol=chat_abstol, doThreadprecomp=false,local_max_diff_level=0,verbosity=0)#parallel run must be switched off for eigen valuse calculation
+@time solve!(DelayMathieu_δb0_mdbm, 20,abstol=chat_abstol,
+ doThreadprecomp=false,local_max_diff_level=1,global_max_diff_level=16,verbosity=1)#parallel run must be switched off for eigen valuse calculation
 println("Finish MDBM solver")
 # -------- Plotting Section 1 --------
 # Get the interpolated solution points
@@ -70,7 +71,8 @@ empty!(ax11)
 
 mesh!(ax11, hcat(xyz_sol...), DT2_mat, color=:green)#, color=xyz_sol[1])
 lines!(ax11, edge2plot_xyz..., linewidth=1, color=:black, label="midpoints solution connected")
-#scatter!(ax11, xyz_sol..., markersize=3, color=:black, label="solution")
+nc_size_max=[log(prod(nc.size)) for nc in DelayMathieu_δb0_mdbm.ncubes]
+scatter!(ax11, xyz_sol..., markersize=8, color=nc_size_max, label="solution")
 
 
 # xyz_val = getevaluatedpoints(DelayMathieu_mdbm)
@@ -78,11 +80,11 @@ lines!(ax11, edge2plot_xyz..., linewidth=1, color=:black, label="midpoints solut
 # scatter!(ax11,xyz_val..., color=(fval), label="evaluated")
 
 display(f)
-
+##
 
 #--------- Stability map of the Mathieu equation (no delay)----------
 
-a1 = 0.01;
+a1 = 0.1;
 τmax = 2π;
 T = 2π;
 b0 = 0.0
@@ -95,10 +97,12 @@ axis = [MDBM.Axis(-2:1:5.0, :δ),
     MDBM.Axis(-0.01:1:5, :ε)]
 
 
-DelayMathieu_δε_mdbm=MDBM_Problem(foo_null, axis,constraint=foo_δε)
-coordinate_abstol=1e-2
+DelayMathieu_δε_mdbm=MDBM_Problem(foo_null, axis,constraint=foo_δε)# stable area
+#DelayMathieu_δε_mdbm=MDBM_Problem(foo_δε, axis)# stability border only - almost the same speed
+chat_abstol=1e-2
 println("Start MDBM solver")
-@time solve!(DelayMathieu_δε_mdbm, 10,abstol=coordinate_abstol, doThreadprecomp=false,local_max_diff_level=0,verbosity=0)#parallel run must be switched off for eigen valuse calculation
+@time solve!(DelayMathieu_δε_mdbm, 20,abstol=chat_abstol,
+ doThreadprecomp=false,local_max_diff_level=1,global_max_diff_level=16,verbosity=1)#parallel run must be switched off for eigen valuse calculation
 println("Finish MDBM solver")
 # -------- Plotting Section 1 --------
 
@@ -116,8 +120,7 @@ edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)
 DT2 = triangulation(DT1)
 DT2_mat = vcat(transpose.(collect.(DT2))...,);
 
-# Plot on Axis 1,1
-
+# Plot on Axis 1,2
 ax12 = GLMakie.Axis(f[1, 2])
 
 mesh!(ax12, hcat(xyz_sol...), DT2_mat, color=:green)#, color=xyz_sol[1])
@@ -133,24 +136,55 @@ display(f)
 
 
 #--------- 3D stability map ----------
-using MDBM
-plotly()
-a1 = 0.01;
+a1 = 0.1;
 τmax = 2π;
 T = 2π;
 method = SemiDiscretization(2, T / 40);
 
-foo(δ, b0, ε) = log(spectralRadiusOfMapping(DiscreteMapping_LR(createMathieuProblem(δ, ε, b0, a1, T=T), method, τmax,
+foo_δb0ε(δ, b0, ε)::Float64 = -log(spectralRadiusOfMapping(DiscreteMapping_LR(createMathieuProblem(δ, ε, b0, a1, T=T), method, τmax,
         n_steps=Int((T + 100eps(T)) ÷ method.Δt)), nev=1, tol=1e-4)); # No additive term calculated
 
-axis = [Axis(-2:0.5:5.0, :δ),
-    Axis(-2:0.5:1.5, :b0),
-    Axis(-0.01:0.5:5, :ε)]
+axis = [MDBM.Axis(-2:0.5:5.0, :δ),
+    MDBM.Axis(-2:0.5:1.5, :b0),
+    MDBM.Axis(-0.01:0.5:5, :ε)]
 
-iteration = 2;
-@time stab_border_points = getinterpolatedsolution(solve!(MDBM_Problem(foo, axis), iteration));
 
-scatter(stab_border_points...,
-    label="", title="Stability border of the delay Mathieu equation", xlabel=L"\delta", ylabel=L"b_0", zlabel=L"\epsilon",
-    guidefontsize=14, tickfont=font(10), markersize=1, markerstrokewidth=0)
+#DelayMathieu_δb0ε_mdbm=MDBM_Problem(foo_null, axis,constraint=foo_δb0ε)# stable area
+DelayMathieu_δb0ε_mdbm=MDBM_Problem(foo_δb0ε, axis)# stability border only - almost the same speed
+chat_abstol=1e-2
+println("Start MDBM solver")
+@time solve!(DelayMathieu_δb0ε_mdbm, 20,abstol=chat_abstol,refinementratio=0.6,
+ doThreadprecomp=false,local_max_diff_level=1,global_max_diff_level=8,verbosity=1)#parallel run must be switched off for eigen valuse calculation
+println("Finish MDBM solver")
+
+
+
+# Get the interpolated solution points
+xyz_sol = getinterpolatedsolution(DelayMathieu_δb0ε_mdbm)
+
+# Connect the solution points to form lines (for visualization)
+# `connectoverlap` is preferred for variable size n-cubes (adaptive refinement).
+@time DT1 = MDBM.connectoverlap(DelayMathieu_δb0ε_mdbm)
+
+# Prepare line segments for plotting
+edge2plot_xyz = [reduce(hcat, [i_sol[getindex.(DT1, 1)], i_sol[getindex.(DT1, 2)], fill(NaN, length(DT1))])'[:] for i_sol in xyz_sol]
+ncsize=[log(prod(nc.size)) for nc in DelayMathieu_δb0ε_mdbm.ncubes]
+
+edge2plot_color = reduce(hcat, [ncsize[getindex.(DT1,1)], ncsize[getindex.(DT1,2)], fill(NaN, length(DT1))])'[:]
+
+# Triangulate the solution for mesh plotting (if needed)
+@time DT2 = triangulation(DT1)
+DT2_mat = vcat(transpose.(collect.(DT2))...,);
+
+# Plot on Axis 1,3
+
+f = Figure(size=(1000, 900))
+ax13 = GLMakie.Axis3(f[1, 1])
+
+# mesh!(ax13, hcat(xyz_sol...), DT2_mat, color=:green)#, color=xyz_sol[1])
+lines!(ax13, edge2plot_xyz..., linewidth=4, color=edge2plot_color, label="midpoints solution connected")
+scatter!(ax13, xyz_sol..., markersize=8, color=:black, label="solution")
+
+
+display(f)
 

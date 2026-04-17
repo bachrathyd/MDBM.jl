@@ -115,3 +115,6 @@ empty!(ax22)
 ax22.title = "Implicit Function: Final Result"
 lines!(ax22, edge2plot_xyz..., linewidth=3, label="boundary")
 display(f)
+save("constraint_only__foo_nothing.png", f)
+
+

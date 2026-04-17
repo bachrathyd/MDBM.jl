@@ -26,3 +26,12 @@ mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0])#, constra
 solve!(mymdbm, 5, doThreadprecomp=false, verbosity=0);
 
 end
+
+
+
+@profview begin
+    for _ in 1:10
+mymdbm = MDBM_Problem(foo_par3_codim1, [-3.0:1.0, -1.0:3.0, -1.0:3.0])#, constraint=c)
+solve!(mymdbm, 8, doThreadprecomp=false, verbosity=0);
+    end
+end

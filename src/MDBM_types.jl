@@ -107,16 +107,6 @@ Base.iterate(sc::SortedCache, st) = iterate(sc.keys, st)
 Base.searchsortedfirst(sc::SortedCache{K,V}, key::K) where {K,V} =
     searchsortedfirst(sc.keys, key)
 
-
-
-
-
-
-
-
-
-
-
 struct MDBMcontainer{RTf,RTc,AT}
     funval::RTf
     cval::RTc

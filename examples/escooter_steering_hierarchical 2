@@ -1,0 +1,308 @@
+## MDBM for balancing an e-scooeter
+# non-zero longitudinal speed!
+# Linearized equations of motion, control with steering with single delay for lean
+
+# import Pkg; Pkg.add("GLMakie")
+# import Pkg; Pkg.add("LaTeXStrings")
+# import Pkg; Pkg.add("ForwardDiff")
+
+5+5
+using MDBM                       # Multi‐Dimensional Bisection Method 
+
+using GLMakie                     # High‐performance plotting             
+using LinearAlgebra               # for complex operations (norm, etc.)
+using LaTeXStrings
+using ForwardDiff
+
+# fixed parameters for e-scooter (Xiaomi M365)
+mch = 9.5;
+mfork = 2.797;
+mwheel1 = 2.894;
+mwheel2 = 1.136;
+p = 0.829;
+b = 0.2418;
+e = 0.0281;
+epsilon = deg2rad(14.2);
+R = 0.111;
+xCGch = 0.4314;
+xCGfork = 0.01; 
+zCGch = 0.0782; 
+zCGfork = 0.271586;
+Bw1 = 0.01134; # !!!
+Aw1 = 0.00628; # !!!
+Bw2 = 0.00536; # !!!
+Aw2 = 0.0029; # !!!
+Ach = 0.1014;
+Bch = 0.4374;
+Cch = 0.3561;
+Dch = -0.1074;
+Afork = 0.341171;
+Bfork = 0.4018;
+Cfork = 0.0840292;
+Dfork = 0.151596;
+v = 5.0; # longitudinal speed (m/s)
+g = 9.81;
+Kpdelta = -1.0; # 10.0; 
+Kddelta = -1.0; # -5.0; 
+τ = 0.00001;  # for lean (phi)
+
+const parlist = (mch,mfork,mwheel1,mwheel2,p,b,e,epsilon,R,xCGch,xCGfork,zCGch,zCGfork,Aw1,Bw1,Aw2,Bw2,Ach,Bch,Cch,Dch,Afork,Bfork,Cfork,Dfork,g,Kpdelta,Kddelta,τ)
+
+function matrices_scooter(p1, v)
+
+    mch,mfork,mwheel1,mwheel2,p,b,e,epsilon,R,xCGch,xCGfork,zCGch,zCGfork,Aw1,Bw1,Aw2,Bw2,Ach,Bch,Cch,Dch,Afork,Bfork,Cfork,Dfork,g,Kpdelta,Kddelta,τ_fake = p1
+
+    # mass matrix
+    M11 = (8*Ach+4*Afork+8*Aw1+8*Aw2+4*Cfork+4*b^2*mfork+e^2*mfork+8*mch*R^2+3*mfork*R^2+8*mwheel1*R^2+8*mwheel2*R^2+4*mfork*xCGfork^2+16*mch*R*zCGch+8*mch*zCGch^2+8*b*mfork*zCGfork+4*mfork*zCGfork^2+4*mfork*(3*b*R+e*xCGfork+3*R*zCGfork)*cos(epsilon)+4*(Afork-Cfork+mfork*(b^2+R^2-xCGfork^2+2*b*zCGfork+zCGfork^2))*cos(2*epsilon)+4*b*mfork*R*cos(3*epsilon)-4*e*mfork*xCGfork*cos(3*epsilon)+4*mfork*R*zCGfork*cos(3*epsilon)-e^2*mfork*cos(4*epsilon)+mfork*R^2*cos(4*epsilon)+4*b*e*mfork*sin(epsilon)+4*mfork*R*xCGfork*sin(epsilon)+4*e*mfork*zCGfork*sin(epsilon)-8*Dfork*sin(2*epsilon)+4*e*mfork*R*sin(2*epsilon)+8*b*mfork*xCGfork*sin(2*epsilon)+8*mfork*xCGfork*zCGfork*sin(2*epsilon)+4*b*e*mfork*sin(3*epsilon)+4*mfork*R*xCGfork*sin(3*epsilon)+4*e*mfork*zCGfork*sin(3*epsilon)+2*e*mfork*R*sin(4*epsilon))/8;
+    M12 = -1/16*(4*b*e^2*mfork+8*b*e*mfork*p+4*e*mfork*R*xCGfork+8*mfork*p*R*xCGfork+4*e^2*mfork*zCGfork+8*e*mfork*p*zCGfork-4*(4*Dch*e+2*Dfork*e+4*Dfork*p-2*e^2*mfork*R-3*e*mfork*p*R-4*e*mch*R*xCGch-2*b*e*mfork*xCGfork-4*b*mfork*p*xCGfork-4*e*mch*xCGch*zCGch-2*e*mfork*xCGfork*zCGfork-4*mfork*p*xCGfork*zCGfork)*cos(epsilon)+8*mfork*(e+p)*(b*e+R*xCGfork+e*zCGfork)*cos(2*epsilon)-8*Dfork*e*cos(3*epsilon)+6*e^2*mfork*R*cos(3*epsilon)+4*e*mfork*p*R*cos(3*epsilon)+8*b*e*mfork*xCGfork*cos(3*epsilon)+8*e*mfork*xCGfork*zCGfork*cos(3*epsilon)+4*b*e^2*mfork*cos(4*epsilon)+4*e*mfork*R*xCGfork*cos(4*epsilon)+4*e^2*mfork*zCGfork*cos(4*epsilon)+2*e^2*mfork*R*cos(5*epsilon)-4*Afork*e*sin(epsilon)+4*Cfork*e*sin(epsilon)-4*b^2*e*mfork*sin(epsilon)+2*e^3*mfork*sin(epsilon)+16*Aw1*p*sin(epsilon)+16*Cfork*p*sin(epsilon)+4*e^2*mfork*p*sin(epsilon)-2*e*mfork*R^2*sin(epsilon)+16*mwheel1*p*R^2*sin(epsilon)+4*e*mfork*xCGfork^2*sin(epsilon)+16*mfork*p*xCGfork^2*sin(epsilon)-8*b*e*mfork*zCGfork*sin(epsilon)-4*e*mfork*zCGfork^2*sin(epsilon)-8*b*e*mfork*R*sin(2*epsilon)+8*e^2*mfork*xCGfork*sin(2*epsilon)+16*e*mfork*p*xCGfork*sin(2*epsilon)-8*e*mfork*R*zCGfork*sin(2*epsilon)-4*Afork*e*sin(3*epsilon)+4*Cfork*e*sin(3*epsilon)-4*b^2*e*mfork*sin(3*epsilon)+3*e^3*mfork*sin(3*epsilon)+4*e^2*mfork*p*sin(3*epsilon)-3*e*mfork*R^2*sin(3*epsilon)+4*e*mfork*xCGfork^2*sin(3*epsilon)-8*b*e*mfork*zCGfork*sin(3*epsilon)-4*e*mfork*zCGfork^2*sin(3*epsilon)-4*b*e*mfork*R*sin(4*epsilon)+4*e^2*mfork*xCGfork*sin(4*epsilon)-4*e*mfork*R*zCGfork*sin(4*epsilon)+e^3*mfork*sin(5*epsilon)-e*mfork*R^2*sin(5*epsilon))/p;
+    M21 = M12;
+    M22 = (4*Afork*e^2+16*Aw1*e^2+16*Aw2*e^2+16*Cch*e^2+12*Cfork*e^2+4*b^2*e^2*mfork+10*e^4*mfork+32*Aw1*e*p+32*Cfork*e*p+24*e^3*mfork*p+32*Aw1*p^2+32*Cfork*p^2+16*e^2*mfork*p^2+2*e^2*mfork*R^2+16*mwheel1*p^2*R^2+16*e^2*mch*xCGch^2+12*e^2*mfork*xCGfork^2+32*e*mfork*p*xCGfork^2+32*mfork*p^2*xCGfork^2+8*b*e^2*mfork*zCGfork+4*e^2*mfork*zCGfork^2+8*e*mfork*(b*e*R+5*e^2*xCGfork+12*e*p*xCGfork+8*p^2*xCGfork+e*R*zCGfork)*cos(epsilon)+(16*Aw2*e^2+16*Cch*e^2+16*Cfork*e^2+15*e^4*mfork+32*Cfork*e*p+32*e^3*mfork*p+16*e^2*mfork*p^2+16*Aw1*e*(e+2*p)+e^2*mfork*R^2-16*mwheel1*p^2*R^2+16*e^2*mch*xCGch^2+16*e^2*mfork*xCGfork^2+32*e*mfork*p*xCGfork^2)*cos(2*epsilon)-4*b*e^2*mfork*R*cos(3*epsilon)+20*e^3*mfork*xCGfork*cos(3*epsilon)+32*e^2*mfork*p*xCGfork*cos(3*epsilon)-4*e^2*mfork*R*zCGfork*cos(3*epsilon)-4*Afork*e^2*cos(4*epsilon)+4*Cfork*e^2*cos(4*epsilon)-4*b^2*e^2*mfork*cos(4*epsilon)+6*e^4*mfork*cos(4*epsilon)+8*e^3*mfork*p*cos(4*epsilon)-2*e^2*mfork*R^2*cos(4*epsilon)+4*e^2*mfork*xCGfork^2*cos(4*epsilon)-8*b*e^2*mfork*zCGfork*cos(4*epsilon)-4*e^2*mfork*zCGfork^2*cos(4*epsilon)-4*b*e^2*mfork*R*cos(5*epsilon)+4*e^3*mfork*xCGfork*cos(5*epsilon)-4*e^2*mfork*R*zCGfork*cos(5*epsilon)+e^4*mfork*cos(6*epsilon)-e^2*mfork*R^2*cos(6*epsilon)-8*b*e^3*mfork*sin(epsilon)-16*b*e^2*mfork*p*sin(epsilon)-8*e^2*mfork*R*xCGfork*sin(epsilon)-16*e*mfork*p*R*xCGfork*sin(epsilon)-8*e^3*mfork*zCGfork*sin(epsilon)-16*e^2*mfork*p*zCGfork*sin(epsilon)+16*Dfork*e^2*sin(2*epsilon)+32*Dfork*e*p*sin(2*epsilon)-10*e^3*mfork*R*sin(2*epsilon)-16*e^2*mfork*p*R*sin(2*epsilon)-16*b*e^2*mfork*xCGfork*sin(2*epsilon)-32*b*e*mfork*p*xCGfork*sin(2*epsilon)-16*e^2*mfork*xCGfork*zCGfork*sin(2*epsilon)-32*e*mfork*p*xCGfork*zCGfork*sin(2*epsilon)-12*b*e^3*mfork*sin(3*epsilon)-16*b*e^2*mfork*p*sin(3*epsilon)-12*e^2*mfork*R*xCGfork*sin(3*epsilon)-16*e*mfork*p*R*xCGfork*sin(3*epsilon)-12*e^3*mfork*zCGfork*sin(3*epsilon)-16*e^2*mfork*p*zCGfork*sin(3*epsilon)+8*Dfork*e^2*sin(4*epsilon)-8*e^3*mfork*R*sin(4*epsilon)-8*e^2*mfork*p*R*sin(4*epsilon)-8*b*e^2*mfork*xCGfork*sin(4*epsilon)-8*e^2*mfork*xCGfork*zCGfork*sin(4*epsilon)-4*b*e^3*mfork*sin(5*epsilon)-4*e^2*mfork*R*xCGfork*sin(5*epsilon)-4*e^3*mfork*zCGfork*sin(5*epsilon)-2*e^3*mfork*R*sin(6*epsilon))/(32*p^2);
+    MM = [M11 M12; M21 M22]
+
+    # damping matrix
+    C11 = 0;
+    C12 = -1/8*(v*cos(epsilon)*(8*Bw1*e+8*Bw2*e+8*Bw1*p-8*Dch*R+8*e*mch*R^2+6*e*mfork*R^2+8*e*mwheel1*R^2+8*e*mwheel2*R^2+4*mfork*p*R^2+8*mwheel1*p*R^2+8*mch*R^2*xCGch+8*e*mch*R*zCGch+8*mch*R*xCGch*zCGch+4*mfork*R*(3*b*e+2*b*p+R*xCGfork+3*e*zCGfork+2*p*zCGfork)*cos(epsilon)+4*R*(-2*Dfork+mfork*(2*e*R+p*R+2*xCGfork*(b+zCGfork)))*cos(2*epsilon)+4*b*e*mfork*R*cos(3*epsilon)+4*mfork*R^2*xCGfork*cos(3*epsilon)+4*e*mfork*R*zCGfork*cos(3*epsilon)+2*e*mfork*R^2*cos(4*epsilon)-4*b*mfork*R^2*sin(epsilon)+12*e*mfork*R*xCGfork*sin(epsilon)+8*mfork*p*R*xCGfork*sin(epsilon)-4*mfork*R^2*zCGfork*sin(epsilon)-4*Afork*R*sin(2*epsilon)+4*Cfork*R*sin(2*epsilon)-4*b^2*mfork*R*sin(2*epsilon)+6*e^2*mfork*R*sin(2*epsilon)+4*e*mfork*p*R*sin(2*epsilon)-2*mfork*R^3*sin(2*epsilon)+4*mfork*R*xCGfork^2*sin(2*epsilon)-8*b*mfork*R*zCGfork*sin(2*epsilon)-4*mfork*R*zCGfork^2*sin(2*epsilon)-4*b*mfork*R^2*sin(3*epsilon)+4*e*mfork*R*xCGfork*sin(3*epsilon)-4*mfork*R^2*zCGfork*sin(3*epsilon)+e^2*mfork*R*sin(4*epsilon)-mfork*R^3*sin(4*epsilon)))/(p*R);
+    C21 = ((Bw2*e+Bw1*(e+p))*v*cos(epsilon))/(p*R);
+    C22 = (32*Kddelta*p^2+4*Afork*e*v+16*Aw1*e*v+16*Aw2*e*v+16*Cch*e*v+12*Cfork*e*v+4*b^2*e*mfork*v+22*e^3*mfork*v+16*Aw1*p*v+16*Cfork*p*v+40*e^2*mfork*p*v+16*e*mfork*p^2*v+2*e*mfork*R^2*v+16*e^2*mch*v*xCGch+16*e*mch*v*xCGch^2+12*e*mfork*v*xCGfork^2+16*mfork*p*v*xCGfork^2+8*b*e*mfork*v*zCGfork+4*e*mfork*v*zCGfork^2+8*mfork*v*(b*e*R+8*e^2*xCGfork+13*e*p*xCGfork+4*p^2*xCGfork+e*R*zCGfork)*cos(epsilon)+v*(16*Aw2*e+16*Cch*e+16*Cfork*e+31*e^3*mfork+16*Cfork*p+48*e^2*mfork*p+16*e*mfork*p^2+16*Aw1*(e+p)+e*mfork*R^2+16*e^2*mch*xCGch+16*e*mch*xCGch^2+16*e*mfork*xCGfork^2+16*mfork*p*xCGfork^2)*cos(2*epsilon)-4*b*e*mfork*R*v*cos(3*epsilon)+28*e^2*mfork*v*xCGfork*cos(3*epsilon)+24*e*mfork*p*v*xCGfork*cos(3*epsilon)-4*e*mfork*R*v*zCGfork*cos(3*epsilon)-4*Afork*e*v*cos(4*epsilon)+4*Cfork*e*v*cos(4*epsilon)-4*b^2*e*mfork*v*cos(4*epsilon)+10*e^3*mfork*v*cos(4*epsilon)+8*e^2*mfork*p*v*cos(4*epsilon)-2*e*mfork*R^2*v*cos(4*epsilon)+4*e*mfork*v*xCGfork^2*cos(4*epsilon)-8*b*e*mfork*v*zCGfork*cos(4*epsilon)-4*e*mfork*v*zCGfork^2*cos(4*epsilon)-4*b*e*mfork*R*v*cos(5*epsilon)+4*e^2*mfork*v*xCGfork*cos(5*epsilon)-4*e*mfork*R*v*zCGfork*cos(5*epsilon)+e^3*mfork*v*cos(6*epsilon)-e*mfork*R^2*v*cos(6*epsilon)-16*b*e^2*mfork*v*sin(epsilon)-16*b*e*mfork*p*v*sin(epsilon)-8*e*mfork*R*v*xCGfork*sin(epsilon)-8*mfork*p*R*v*xCGfork*sin(epsilon)-16*e^2*mfork*v*zCGfork*sin(epsilon)-16*e*mfork*p*v*zCGfork*sin(epsilon)+16*Dfork*e*v*sin(2*epsilon)+16*Dfork*p*v*sin(2*epsilon)-18*e^2*mfork*R*v*sin(2*epsilon)-16*e*mfork*p*R*v*sin(2*epsilon)+16*e*mwheel1*p*R*v*sin(2*epsilon)+16*mwheel1*p^2*R*v*sin(2*epsilon)-16*b*e*mfork*v*xCGfork*sin(2*epsilon)-16*b*mfork*p*v*xCGfork*sin(2*epsilon)-16*e*mfork*v*xCGfork*zCGfork*sin(2*epsilon)-16*mfork*p*v*xCGfork*zCGfork*sin(2*epsilon)-20*b*e^2*mfork*v*sin(3*epsilon)-16*b*e*mfork*p*v*sin(3*epsilon)-12*e*mfork*R*v*xCGfork*sin(3*epsilon)-8*mfork*p*R*v*xCGfork*sin(3*epsilon)-20*e^2*mfork*v*zCGfork*sin(3*epsilon)-16*e*mfork*p*v*zCGfork*sin(3*epsilon)+8*Dfork*e*v*sin(4*epsilon)-12*e^2*mfork*R*v*sin(4*epsilon)-8*e*mfork*p*R*v*sin(4*epsilon)-8*b*e*mfork*v*xCGfork*sin(4*epsilon)-8*e*mfork*v*xCGfork*zCGfork*sin(4*epsilon)-4*b*e^2*mfork*v*sin(5*epsilon)-4*e*mfork*R*v*xCGfork*sin(5*epsilon)-4*e^2*mfork*v*zCGfork*sin(5*epsilon)-2*e^2*mfork*R*v*sin(6*epsilon))/(32*p^2);
+    CC = [C11 C12; C21 C22]
+
+    # stiffness matrix
+    K11 = -1/2*(g*(2*mch*R+mfork*R+2*mwheel1*R+2*mwheel2*R+2*mch*zCGch+2*mfork*(b+zCGfork)*cos(epsilon)+mfork*R*cos(2*epsilon)+2*mfork*xCGfork*sin(epsilon)+e*mfork*sin(2*epsilon)));
+    K12 = -1/4*((-3*e^2*g*mfork*R-4*e*g*R*(mfork*p+mch*xCGch)+v^2*(4*Bw1+4*Bw2+R*(3*mfork*R+4*(mwheel1+mwheel2)*R+4*mch*(R+zCGch))))*cos(epsilon)+R*(2*b*mfork*v^2-2*e*g*mfork*xCGfork-4*g*mfork*p*xCGfork+2*mfork*v^2*zCGfork+2*mfork*(b*v^2-e*g*xCGfork+v^2*zCGfork)*cos(2*epsilon)+(-(e^2*g*mfork)+mfork*R*v^2)*cos(3*epsilon)+e*g*mfork*R*sin(epsilon)-4*g*mwheel1*p*R*sin(epsilon)+e*mfork*v^2*sin(epsilon)+2*b*e*g*mfork*sin(2*epsilon)+2*mfork*v^2*xCGfork*sin(2*epsilon)+2*e*g*mfork*zCGfork*sin(2*epsilon)+e*g*mfork*R*sin(3*epsilon)+e*mfork*v^2*sin(3*epsilon)))/(p*R);
+    K21 = (g*(2*e*mfork*xCGfork+4*mfork*p*xCGfork+e*(3*e*mfork+4*mfork*p+4*mch*xCGch)*cos(epsilon)+2*e*mfork*xCGfork*cos(2*epsilon)+e^2*mfork*cos(3*epsilon)-e*mfork*R*sin(epsilon)+4*mwheel1*p*R*sin(epsilon)-2*b*e*mfork*sin(2*epsilon)-2*e*mfork*zCGfork*sin(2*epsilon)-e*mfork*R*sin(3*epsilon)))/(4*p);
+    K22 = -1/8*(-8*Kpdelta*p^2*R-e*g*mfork*p*R^2+4*g*mwheel1*p^2*R^2-3*e^2*mfork*R*v^2-4*e*mfork*p*R*v^2-4*e*mch*R*v^2*xCGch-2*mfork*R*(b*e*g*p+3*e*v^2*xCGfork+4*p*v^2*xCGfork+e*g*p*zCGfork)*cos(epsilon)-4*R*(g*mwheel1*p^2*R+e*v^2*(e*mfork+mfork*p+mch*xCGch))*cos(2*epsilon)+2*b*e*g*mfork*p*R*cos(3*epsilon)-2*e*mfork*R*v^2*xCGfork*cos(3*epsilon)+2*e*g*mfork*p*R*zCGfork*cos(3*epsilon)+e*g*mfork*p*R^2*cos(4*epsilon)-e^2*mfork*R*v^2*cos(4*epsilon)+2*b*e*mfork*R*v^2*sin(epsilon)+2*e*g*mfork*p*R*xCGfork*sin(epsilon)+8*g*mfork*p^2*R*xCGfork*sin(epsilon)+2*e*mfork*R*v^2*zCGfork*sin(epsilon)+2*e^2*g*mfork*p*R*sin(2*epsilon)+4*e*g*mfork*p^2*R*sin(2*epsilon)-4*Bw1*p*v^2*sin(2*epsilon)+2*e*mfork*R^2*v^2*sin(2*epsilon)-4*mwheel1*p*R^2*v^2*sin(2*epsilon)+4*e*g*mch*p*R*xCGch*sin(2*epsilon)+2*b*e*mfork*R*v^2*sin(3*epsilon)+2*e*g*mfork*p*R*xCGfork*sin(3*epsilon)+2*e*mfork*R*v^2*zCGfork*sin(3*epsilon)+e^2*g*mfork*p*R*sin(4*epsilon)+e*mfork*R^2*v^2*sin(4*epsilon))/(p^2*R);
+    KK = [K11 K12; K21 K22]
+
+    return MM, CC, KK
+
+end
+
+function char_fun_scooter_steering_hierarchical(Kpphi, Kdphi, ω, τ; p1=parlist, v=5.0)
+ 
+    mch,mfork,mwheel1,mwheel2,p,b,e,epsilon,R,xCGch,xCGfork,zCGch,zCGfork,Aw1,Bw1,Aw2,Bw2,Ach,Bch,Cch,Dch,Afork,Bfork,Cfork,Dfork,g,Kpdelta,Kddelta,τ_fake = p1
+    MM, CC, KK = matrices_scooter(p1, v)
+    # (M11,M12,M21,M22,MM,C11,C12,C21,C22,CC,K11,K12,K21,K22,KK) = p2
+
+    # control matrices
+    Pphi = [0 0; -Kpphi*Kpdelta 0];
+    # Pdelta = [0 0; 0 -Kpdelta]; # included in KK!
+    Dphi = [0 0; -Kdphi*Kpdelta 0];
+    # Ddelta = [0 0; 0 -Kddelta]; # included in CC!
+    
+    lambda = im * ω;
+    charmat = MM.*lambda^2 + CC.*lambda + KK -(Pphi + Dphi.*lambda).*exp(-lambda*τ);
+    chareq = det(charmat);
+    return chareq
+
+end
+
+#function test
+char_fun_scooter_steering_hierarchical(-50.0, -20.0, 15.0,0.01, p1=parlist, v=v)
+@code_warntype  char_fun_scooter_steering_hierarchical(-50.0, -20.0, 15.0, 0.1, p1=parlist, v=v)
+
+
+## MDBM for stability analysis in (Kpphi, Kdphi, ω) space, with fixed τ = 0.01 s
+
+# Define a small wrapper for MDBM that only uses (Kpphi,Kdphi,ω):
+function char_fun3d(Kpphi, Kdphi, ω)
+    
+    char_eq = char_fun_scooter_steering_hierarchical(Kpphi, Kdphi, ω, 0.01, p1=parlist, v=5.0)
+    return real(char_eq), imag(char_eq)
+end
+@code_warntype char_fun3d(-500.0,-20.0, 15.0)
+
+# Choose parameter ranges
+Kpphi_min, Kpphi_max = -1000.0, 1000.0
+Kdphi_min, Kdphi_max = -80.0, 80.0
+ω_min, ω_max = -0.5, 150.0       
+
+# Build coarse MDBM axes in (Kpphi, Kdphi, ω):
+axis_Kpphi = LinRange(Kpphi_min, Kpphi_max, 11)
+axis_Kdphi = LinRange(Kdphi_min, Kdphi_max, 11)
+axis_ω = LinRange(ω_min, ω_max, 11)
+
+axes3d = [axis_Kpphi, axis_Kdphi, axis_ω]
+mdbm3d = MDBM_Problem(char_fun3d, axes3d)
+
+# Perform a few refinements (e.g. 4 or 5) to resolve curves:
+refine_iters3d = 5
+
+#@profview  solve!(mdbm3d, 2,verbosity=1)
+@time solve!(mdbm3d, refine_iters3d,verbosity = 1)
+println("→ Finished MDBM.")
+
+# PLOTTING CODIM‐2 CURVES in (Kpphi,Kdphi), colored by ω
+GLMakie.activate!()
+import GLMakie: scatter, Axis, Figure
+
+figure1 = Figure(size=(900, 600))
+xyzr_sol = getinterpolatedsolution(mdbm3d)
+ax = Axis(figure1[1, 1])
+scatter!(ax, xyzr_sol[1], xyzr_sol[2], color=xyzr_sol[3], markersize=6)
+ax.xlabel = L"K_{\mathrm{p}\varphi}^{\mathrm s}\, [1]"
+ax.ylabel = L"K_{\mathrm{d}\varphi}^{\mathrm s}\, [\mathrm{s}]"
+ax.title = L"Stabilitási\ térkép"
+ax.xticklabelsize = 12
+ax.yticklabelsize = 12
+
+display(figure1)
+save("stabplot.png", figure1)
+
+## Simulation
+
+using DifferentialEquations
+
+function escooter_state_space(p1, v)
+    
+    mch,mfork,mwheel1,mwheel2,p,b,e,epsilon,R,xCGch,xCGfork,zCGch,zCGfork,Aw1,Bw1,Aw2,Bw2,Ach,Bch,Cch,Dch,Afork,Bfork,Cfork,Dfork,g,Kpdelta,Kddelta,τ_fake = p1
+
+    MM, CC, KK = matrices_scooter(p1, v)
+    # (M11,M12,M21,M22,MM,C11,C12,C21,C22,CC,K11,K12,K21,K22,KK) = p2
+
+    Z = zeros(2,2)
+    I2 = Matrix(LinearAlgebra.I, 2, 2)
+    MMinv = inv(MM)
+
+    A = [ Z      I2;
+          -MMinv*KK   -MMinv*CC]
+    B = [zeros(2,2);
+         MMinv]
+
+    return A, B
+end
+
+A, B = escooter_state_space(parlist, v)
+@code_warntype  escooter_state_space(parlist,v)
+
+const Kpphi0 = -5.0; # -500.0;
+const Kdphi0 = -2.5; # -50.0;
+
+p = (A, B, τ, Kpphi0, Kdphi0)
+
+function escooter_diffeq(q,h,p,t)
+
+    (A, B ,τ, Kpphi, Kdphi) = p
+    qtau = h(p,t-τ)
+    u = [0.0, -Kpphi*Kpdelta * qtau[1] - Kpdelta*Kdphi * qtau[3]]
+    return A*q + B*u
+end
+
+u0 = [0.0, 0.0, 0.025, 0.0 ]  
+h(p,t) = u0;
+
+tspan = (0.0, 10.0)
+
+prob = DDEProblem(escooter_diffeq, u0, h, tspan, p; constant_lags=[τ])
+
+sol = solve(prob, MethodOfSteps(BS3()); reltol=1e-3, abstol=1e-6, saveat=0.005)
+
+ts  = sol.t
+φ   = sol[1,:]
+δ   = sol[2,:]
+φd  = sol[3,:]
+δd  = sol[4,:]
+
+# -----------------------
+# GLMakie plot
+# -----------------------
+using GLMakie: lines, Axis, Figure
+fig = Figure(size=(900, 700))
+
+ax1 = Axis(fig[1, 1], title="Lean angle ϕ(t)", ylabel="rad")
+ax2 = Axis(fig[2, 1], title="Steer angle δ(t)", ylabel="rad")
+ax3 = Axis(fig[3, 1], title="Lean rate ϕ̇(t)", ylabel="rad/s")
+ax4 = Axis(fig[4, 1], title="Steer rate δ̇(t)", ylabel="rad/s", xlabel="time [s]")
+
+lines!(ax1, ts, φ,  color=:blue)
+lines!(ax2, ts, δ,  color=:red)
+lines!(ax3, ts, φd, color=:green)
+lines!(ax4, ts, δd, color=:purple)
+
+fig
+# save("timegraph_withcontrol.png", fig)
+
+vs = range(0.0, 10.0; length=600)            
+vals_real = zeros(4, length(vs))       
+vals_imag = zeros(4, length(vs))         
+
+for (i, vloc) in enumerate(vs)
+    # local A, B
+    A, B = escooter_state_space(parlist, vloc)
+    λ = eigvals(A) 
+    
+    # @show norm(A)
+    
+    # konzisztens sorrend: valós rész alapján rendezzük
+    λ_sorted = sort(λ, by = x -> real(x))
+
+    vals_real[:, i] = real.(λ_sorted)
+    vals_imag[:, i] = imag.(λ_sorted)
+end
+
+# GLMakie ábra (valós és képzetes részek külön)
+figure3 = Figure(size=(900, 700))
+
+ax1 = Axis(figure3[1, 1],
+    title = "Eigenvalue real parts vs speed",
+    xlabel = "v [m/s]",
+    ylabel = "Re(λ) [1/s]")
+
+ax2 = Axis(figure3[2, 1],
+    title = "Eigenvalue imaginary parts vs speed",
+    xlabel = "v [m/s]",
+    ylabel = "Im(λ) [1/s]")
+
+colors = (:red, :blue, :green, :purple)
+
+for k in 1:4
+    lines!(ax1, vs, vals_real[k, :], color=colors[k], linewidth=2)
+    lines!(ax2, vs, vals_imag[k, :], color=colors[k], linewidth=2)
+end
+
+figure3
+# save("eigplot_withcontrol.png", figure3)
+
+# ============================================================
+# STABILITÁSI ANALÍZIS: mely sebességek mellett stabil?
+# ============================================================
+
+# A mozgás stabil, ha az összes sajátérték valós része negatív
+is_stable = vec(all(vals_real .< 0, dims=1))  # dims=1 = minden sajátérték sorai
+
+# Stabil sebességek
+stable_speeds = vs[is_stable]
+
+println("\n" * "="^60)
+println("STABILITÁSI ANALÍZIS")
+println("="^60)
+
+if !isempty(stable_speeds)
+    # Sebességtartományok keresése (egymást követő stabil sebességek)
+    stable_indices = findall(is_stable)
+    ranges = []
+    
+    start_idx = stable_indices[1]
+    prev_idx = stable_indices[1]
+    
+    for idx in stable_indices[2:end]
+        if idx != prev_idx + 1
+            # Új tartomány kezdése
+            push!(ranges, (vs[start_idx], vs[prev_idx]))
+            start_idx = idx
+        end
+        prev_idx = idx
+    end
+    # Az utolsó tartomány
+    push!(ranges, (vs[start_idx], vs[prev_idx]))
+    
+    println("\nStabil sebességtartományok:")
+    for (i, (v_min, v_max)) in enumerate(ranges)
+        println("  $i. tartomány: $v_min m/s - $v_max m/s")
+    end
+    
+    println("\nAz összes stabil sebesség intervalluma: $(minimum(stable_speeds)) - $(maximum(stable_speeds)) m/s")
+else
+    println("\n⚠ FIGYELMEZTETÉS: Nincsenek stabil sebességtartományok a vizsgált tartományban!")
+end
+
+println("="^60 * "\n")
