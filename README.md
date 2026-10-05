@@ -159,6 +159,46 @@ plot(a_sol,b_sol,linestyle="", marker=".", markersize=1)
 <img src="assets/Mandelbrot.png"
      alt="solution "/>
 
+## Example 4: vectorized (batched) evaluation, e.g. on a GPU
+Every stage of the method -- the initial grid, each refinement and each neighbour
+check -- first collects all the new points it needs and evaluates them together.
+By default these points are evaluated by calling `f` in a threaded loop. With the
+keyword `vectorized` you can hand the whole batch to a function of your own,
+which is called **once per stage**: a GPU kernel launch, a vectorized
+(SIMD/BLAS) routine, a cluster job, ...
+
+```julia
+using MDBM
+
+f(x, y) = x^2 + y^2 - 2.0^2                    # still required (see below)
+
+# all new points of a stage at once: a Vector of tuples (x, y),
+# sorted, without duplicates, none of them evaluated before
+fv(points) = [x^2 + y^2 - 2.0^2 for (x, y) in points]
+
+mymdbm = MDBM_Problem(f, [-3.0:3.0, -3.0:3.0]; vectorized = fv)
+solve!(mymdbm, 5)
+x_sol, y_sol = getinterpolatedsolution(mymdbm)
+```
+
+Rules:
+- `fv(points)` must return a vector of the same length, with the values `f` would
+  return at the same points (same type, e.g. a number or an `SVector` for several
+  functions).
+- `f` is still needed: it fixes the number and type of the function values and is
+  used for the occasional single-point call, so it must agree with `fv`.
+- It requires memoization (`memoization = true`, the default). A `constraint`, if
+  given, is still evaluated point by point.
+- The solution is identical to the scalar evaluation (tested).
+
+Thread safety of the default evaluation: without `vectorized`, the batch is
+evaluated with `Threads.@threads`, so `f` is called from several threads at the
+same time when Julia runs with more than one thread. `f` must then be thread-safe.
+A shared, preallocated work array or a global cache inside `f` causes a data race
+that turns good points into wrong ones at random places. Fix it by allocating per
+call or per thread, or by running Julia with one thread. With `vectorized`, MDBM
+itself calls `fv` from a single task.
+
 ## History
 
 I am an assistant professor at the Budapest University of Technology and Economics, at the Faculty of Mechanical Engineering, the Department of Applied Mechanics.
