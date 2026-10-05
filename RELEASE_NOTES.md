@@ -1,3 +1,21 @@
+# Unreleased
+
+## ✨ New: vectorized (batched) evaluation
+
+`MDBM_Problem(f, axes; vectorized = fv)` hands all new points of a stage (the
+initial grid, each refinement, each neighbour check) to `fv(points)` in ONE call,
+instead of evaluating `f` point by point in a threaded loop. Use it for GPU kernels
+or any other batched evaluator. Fully backward compatible: without the keyword
+nothing changes. See "Example 4" in the README and the `MDBM_Problem` docstring.
+
+- `fv(points::Vector{<:Tuple})` returns the vector of function values (same type as `f`).
+- `f` is still required (type detection, single-point calls) and must agree with `fv`.
+- Requires memoization (the default); a constraint is still evaluated pointwise.
+- Test: identical interpolated solution and evaluation cache to the scalar path.
+
+Also documented: the default threaded batch evaluation needs a thread-safe `f`
+(shared work arrays inside `f` cause data races that corrupt random points).
+
 # MDBM.jl v0.2.2 Release Notes
 
 This release introduces a major new feature: **error-based adaptive refinement**. This allows for more efficient and accurate discovery of solution manifolds by intelligently focusing computational effort on areas where the solution is changing most rapidly.
