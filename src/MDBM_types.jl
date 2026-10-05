@@ -127,8 +127,10 @@ struct MemF{RTf,RTc,AT} <: Function
     c::FunctionWrapper{RTc,AT}
     fvalarg::SortedCache{AT,Tuple{RTf,RTc}}#Vector{MDBMcontainer{RTf,RTc,AT}}#funval,callargs
     memoryacc::Ref{Int64}#MVector{1,Int64} #number of function value call for already evaluated parameters
-    MemF(f, c, cont::SortedCache{AT,Tuple{RTf,RTc}}, ::Type{RTf}, ::Type{RTc}, ::Type{AT}) where {RTf,RTc,AT} =
-        new{RTf,RTc,AT}(FunctionWrapper{RTf,AT}(f), FunctionWrapper{RTc,AT}(c), cont, Ref(Int64(0)))
+    "optional vectorized evaluator: points::Vector{AT} -> vector of function values, or `nothing`"
+    fvec::Any
+    MemF(f, c, cont::SortedCache{AT,Tuple{RTf,RTc}}, ::Type{RTf}, ::Type{RTc}, ::Type{AT}, fvec=nothing) where {RTf,RTc,AT} =
+        new{RTf,RTc,AT}(FunctionWrapper{RTf,AT}(f), FunctionWrapper{RTc,AT}(c), cont, Ref(Int64(0)), fvec)
 end
 
 (memfun::MemF{RTf,RTc,AT})(::Type{RTf}, ::Type{RTc}, args::AT) where {RTf,RTc,AT} = (memfun.f(args...,)::RTf, memfun.c(args...,)::RTc)::Tuple{RTf,RTc}
@@ -216,10 +218,21 @@ function (memfun::MemF{RTf,RTc,AT})(Vargs::AbstractVector{AT}) where {RTf,RTc,AT
     # We use a standard Array since we are going to write to it in parallel
     vals_computed = Vector{Tuple{RTf,RTc}}(undef, length(keys_to_compute))
 
-    # 5. Parallel Compute
-    # No locks needed because we are writing to a disjoint 'vals_computed' array
-    Threads.@threads for i in eachindex(keys_to_compute)
-        vals_computed[i] = memfun(RTf, RTc, keys_to_compute[i])
+    # 5. Compute
+    if memfun.fvec === nothing
+        # Parallel: no locks needed because we are writing to a disjoint 'vals_computed' array
+        Threads.@threads for i in eachindex(keys_to_compute)
+            vals_computed[i] = memfun(RTf, RTc, keys_to_compute[i])
+        end
+    else
+        # Vectorized: ONE call for all missing points of this stage (e.g. one GPU
+        # kernel launch); the constraint, if any, is still evaluated pointwise.
+        fvals = memfun.fvec(keys_to_compute)
+        length(fvals) == length(keys_to_compute) || error("the vectorized function returned " *
+            "$(length(fvals)) values for $(length(keys_to_compute)) points")
+        for i in eachindex(keys_to_compute)
+            vals_computed[i] = (convert(RTf, fvals[i])::RTf, memfun.c(keys_to_compute[i]...)::RTc)
+        end
     end
 
     # 6. Bulk Insert (Single Threaded)
@@ -347,6 +360,16 @@ ax2=Axis(-5:2:5.0,"y") # initial grid in y direction
 
 mymdbm=MDBM_Problem(foo,[ax1,ax2],constraint=c)
 ```
+
+# Vectorized evaluation
+`MDBM_Problem(f, axes; vectorized = fv)` with `fv(points::Vector{<:Tuple})` returning
+the vector of function values at all `points`: every stage of the method (the
+initial grid, each refinement, each neighbour check) then evaluates its new
+points with ONE call of `fv` instead of a threaded loop over `f` -- e.g. one
+GPU kernel launch per stage. `f` itself is still needed (type detection,
+occasional single-point calls); the results must agree with `f`. Requires
+`memoization = true` (the default); a constraint, if given, is still evaluated
+pointwise.
 """
 #mutable
 struct MDBM_Problem{fcT,N,Nf,Nc,Nfc,t01T,t11T,IT,FT,aT}
@@ -372,7 +395,8 @@ end
 
 function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
     Nf=f(getindex.(axes0, 1)...) === nothing ? 0 : length(f(getindex.(axes0, 1)...)),
-    Nc=constraint(getindex.(axes0, 1)...) === nothing ? 0 : length(constraint(getindex.(axes0, 1)...)), contour_level_fc=nothing)#Float16(1.), nothing
+    Nc=constraint(getindex.(axes0, 1)...) === nothing ? 0 : length(constraint(getindex.(axes0, 1)...)), contour_level_fc=nothing,
+    vectorized=nothing)#Float16(1.), nothing
     Nfc = Nf + Nc
     axes = deepcopy.(axes0)
     argtypesofmyfunc = map(x -> typeof(x).parameters[1], axes)#Argument Type
@@ -399,8 +423,9 @@ function MDBM_Problem(f::Function, axes0::AbstractVector{<:Axis}; constraint::Fu
     else
         #println("Creating function with memoization = ", memoization)
         if memoization
-            fun = MemF(f, constraint, SortedCache{AT,Tuple{RTf,RTc}}(), RTf, RTc, AT)#Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
+            fun = MemF(f, constraint, SortedCache{AT,Tuple{RTf,RTc}}(), RTf, RTc, AT, vectorized)#Array{MDBMcontainer{RTf,RTc,AT}}(undef, 0))
         else
+            vectorized === nothing || @warn "`vectorized` needs memoization = true; it is ignored"
             #   fun = (x::AT) -> (f(x...)::RTf, constraint(x...)::RTc)::Tuple{RTf,RTc}
             fun = (x) -> (f(x...), constraint(x...))
         end
@@ -414,9 +439,11 @@ end
 
 function MDBM_Problem(f::Function, a::AbstractVector{<:AbstractVector}; constraint::Function=(x...,) -> nothing, memoization::Bool=true,    #Nf=length(f(getindex.(axes0,1)...)),
     Nf=f(getindex.(a, 1)...) === nothing ? 0 : length(f(getindex.(a, 1)...)),
-    Nc=constraint(getindex.(a, 1)...) === nothing ? 0 : length(constraint(getindex.(a, 1)...)), contour_level_fc=nothing)
+    Nc=constraint(getindex.(a, 1)...) === nothing ? 0 : length(constraint(getindex.(a, 1)...)), contour_level_fc=nothing,
+    vectorized=nothing)
     axes = [Axis(ax) for ax in a]
-    MDBM_Problem(f, axes, constraint=constraint, memoization=memoization, Nf=Nf, Nc=Nc, contour_level_fc=contour_level_fc)#,Vector{NCube{Int64,Float64,Val(Ndim)}}(undef, 0))
+    MDBM_Problem(f, axes, constraint=constraint, memoization=memoization, Nf=Nf, Nc=Nc, contour_level_fc=contour_level_fc,
+        vectorized=vectorized)#,Vector{NCube{Int64,Float64,Val(Ndim)}}(undef, 0))
 end
 
 #notes this keeps the previouse function evaluations
